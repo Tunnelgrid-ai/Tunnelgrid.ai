@@ -1,0 +1,259 @@
+# Brand Perception Audit Platform: PRD
+
+## Introduction
+
+As more people turn to AI chatbots and search agents for product information, brands are increasingly concerned with how these models portray them. Traditional SEO is evolving into a need for **“AI-age SEO”** – in other words, ensuring your brand has visibility and a positive presence in answers from AI platforms like ChatGPT, Perplexity, and Claude. This platform is designed to help brand managers, SEO specialists, and marketers audit and influence their brand’s perception across multiple AI models. It will accept a brand or product name as input and simulate various **user personas and queries** to see what answers the AI platforms give. The system then analyzes those responses for sentiment, tone, accuracy (hallucinations or outdated info), query intent, and overall brand portrayal. Finally, it presents the findings in a **multi-model dashboard**, including a proprietary **“Visibility + Influence Score”** to benchmark the brand’s discoverability versus competitors over time, and generates actionable recommendations to improve the brand’s AI visibility.
+
+**Goals of the Platform:**
+
+* **Audit AI Brand Perception:** Automatically query leading AI models about the brand (and competitors) to reveal how the brand is described or recommended in various contexts.
+* **Multi-Model Comparison:** Show side-by-side insights from ChatGPT (OpenAI), Perplexity, and Claude (Anthropic) to identify differences in brand portrayal across AI systems.
+* **Sentiment & Tone Analysis:** Determine whether the AI responses are positive, neutral, or negative in tone and sentiment towards the brand.
+* **Detect Issues:** Flag any **hallucinations** (incorrect facts) or **outdated information** in the AI responses that might mislead users.
+* **Visibility + Influence Scoring:** Quantify the brand’s presence and favorability in AI outputs relative to competitors – essentially an **AI Share-of-Voice** metric – and track this score over time.
+* **Actionable Optimization:** Provide specific, AI-focused SEO recommendations (e.g. content updates, adding structured data, improving public info) to **improve the brand’s standing** in these AI models’ responses.
+
+## Solution Overview and Architecture
+
+The platform consists of a front-end web application (built with **Supabase** and **Lovable**) and a Python-based backend analysis engine. The high-level flow is:
+
+1. **User Input:** The user enters a brand name, product line, or specific product as the focus of the audit (and may optionally input one or more competitor names for comparison).
+2. **Topics, Personas & Query Generation:** The system generates a set of **Topics**, **user personas** and related queries that a person in that role might ask about the brand or product. The user can review and edit these. These can be created by calling the API of some AI model.
+3. **AI API Queries:** Then the backend calls the APIs of ChatGPT (OpenAI), Perplexity, and Claude (and potentially others) to retrieve answers for each query that are asked by the users.
+4. **Response Analysis:** The returned AI responses are analyzed for how often the brand is mentioned in the answers. Which other brands / competitors are mentioned. In instances where the brand is mentioned what is the sentiment, tone, query intent type (informational, comparative, etc.). Key topics mentioned in relation to the brand are extracted.
+5. **Data Aggregation:** Results from all models are aggregated and stored. The **Visibility + Influence Score** is computed based on how prominently and favorably the brand appears, especially versus competitors.
+6. **Dashboard & Visualization:** The front-end displays a comprehensive dashboard with visualizations – comparing brand portrayal across models, sentiment/tone breakdown, topic clusters, and the visibility/influence score (with historical trend).
+7. **Recommendations:** Based on the findings, the platform generates a list of recommended actions (e.g. update content about a certain feature, add FAQ schema, address a noted negative sentiment point) to improve the brand’s AI presence.
+
+This architecture leverages Supabase for user management and data storage, while Lovable’s integration with Supabase enables a smooth development of the UI and real-time updates. The Python backend orchestrates the AI API calls and data processing logic. Below is an overview of the components and data flow:
+
+* **Frontend (Lovable + Supabase):** Handles user interaction – onboarding, input forms, editing queries, and presenting results. It uses Supabase Auth for sign-in and stores user inputs and results in a Supabase Postgres database. The Lovable platform’s visual builder will construct the UI screens and can interact with the database (and trigger backend logic) through its native integration.
+* **Backend Analysis Engine (Python):** Encapsulates the core logic. It receives the user’s inputs (brand and queries), calls out to the AI model APIs, processes the responses, and writes the analysis results back to the database. This could be implemented as a microservice (e.g. a FastAPI app) or a Supabase Edge Function (converted to TypeScript) – for an MVP, a simple Python service is fastest to implement.
+* **AI Model APIs:** The platform integrates with OpenAI’s API (to represent ChatGPT’s answers, using e.g. GPT-4), Anthropic’s Claude API, and Perplexity’s API (for web-informed answers). Each model provides its answer to each query, which the backend captures for analysis.
+* **Database (Supabase Postgres):** Stores persistent data – user profiles, projects (each audit instance with brand info and timestamp), the list of queries used, raw AI responses, analysis metrics (sentiment scores, etc.), the computed score, and the generated recommendations. By using Supabase, we get a ready-made secure database with row-level security so each user only accesses their own data. We also benefit from Supabase’s real-time capabilities to reflect updated results on the UI as soon as analysis is complete.
+
+*(In a production deployment, the backend and Supabase can be hosted in the cloud, and Lovable’s web app connects to them via Supabase’s client libraries. This modular design allows the MVP to be built rapidly and scaled as needed.)*
+
+## Backend Methodology (Python Logic)
+
+The backend is responsible for turning the user’s input into a series of AI queries, collecting the responses, analyzing them, and computing scores/recommendations. This section details how each part of that process can be structured:
+
+### 1. Input Processing & Persona/Query Generation
+
+When a user provides a brand or product name, the backend first prepares a diverse set of questions to ask the AI models. The aim is to simulate different **perspectives and intents** a real user might have. We generate **user personas** to cover these angles. For example, one persona could be a curious first-time buyer asking general info, another a competitor’s customer comparing products, another a dissatisfied user highlighting negatives, etc.. Each persona yields one or more queries.
+
+**How to generate personas and queries:**
+
+* *Automatic Persona Suggestion:* The system can use a template library or a prompt to an LLM (like GPT-4) to generate relevant personas given the brand’s industry. The brand name and any provided competitor names are inserted into query templates for each persona.
+* *Diverse Query Types:* Ensure a mix of **informational queries** (e.g. “What is \[Brand] known for?”), **comparative queries** (e.g. “Is \[Brand] better than \[Competitor] for X?”), and **navigational/transactional queries** (e.g. “Where can I buy \[Brand] products?” or “How to contact \[Brand] support?”). This covers different user intents (know, compare, buy, etc.). If the input is a specific product, queries will focus on that product (features, reviews, comparisons to similar products).
+* *Competitor Integration:* If competitors are provided (or identified via a brief lookup or user input), some queries should explicitly compare the brand vs. competitor. For instance, “Why choose \[Brand] over \[Competitor]?” to see if the AI favors one over the other. Competitor names can also be used in generic queries (“best \[product category] brands”) to test brand visibility.
+* *Editable by User:* The generated list of persona-based queries is presented to the user in the UI for review. Users can edit wording, remove questions not relevant, or add additional questions they want to test. This ensures the audit covers any specific concerns the user has.
+
+**Example:** For a hypothetical “Brand X” (electronics) vs “Competitor Y”, the system might generate something like the table below:
+
+| **Persona (User Type)** | **Example Query**                                                 | **Query Intent**            |
+| ----------------------- | ----------------------------------------------------------------- | --------------------------- |
+| Price-Sensitive Shopper | “Is **Brand X** a better value for money than **Competitor Y**?”  | Comparative (Pricing)       |
+| Tech Enthusiast         | “What are the standout features of **Brand X**’s latest product?” | Informational (Features)    |
+| Dissatisfied Customer   | “What are common complaints about **Brand X** products?”          | Informational (Pain Points) |
+| Seeking Alternatives    | “What are the best alternatives to **Brand X** right now?”        | Informational (Competitive) |
+
+*Table: Sample personas and queries generated for a Brand X audit.* In practice, each persona helps uncover a different facet of the brand’s perception (value, features, criticisms, visibility among alternatives, etc.).
+
+Once the personas and queries are finalized (either automatically or after user edits), the backend proceeds to query the AI models.
+
+### 2. Querying AI Models via APIs
+
+For each query in the list, the backend will call the APIs of the selected AI platforms and gather their responses. In an MVP, this can be done sequentially for simplicity, but it’s advisable to perform calls in parallel (using Python async or threading) to reduce total wait time, since we might be querying 3 models for, say, 10 queries (30 total calls).
+
+**API Integration details:**
+
+For all of the API calls, think about what user / system prompt changes have to be made tso that the goal and objective of the overall analysis is achieved
+
+* **ChatGPT (OpenAI):** Use OpenAI’s API (e.g. `gpt-4` model with web search) with the query as the prompt. To mimic ChatGPT’s typical answer style, we can provide a brief system prompt like “You are ChatGPT, a knowledgeable assistant. Answer the user’s question thoroughly.” Then user prompt as the generated query. The API returns a completion which is the answer.The backend will extract the answer text (and we should keep the sources for reference or accuracy checking).
+* **Claude (Anthropic):** Use Anthropic’s Claude API (e.g. Claude v2). Claude often requires formatting the prompt with a prefix like `"\n\nHuman: [query]\n\nAssistant:"` to get a completion. The backend will format and send the query, and get Claude’s answer. The backend will extract the answer text (and we should keep the sources for reference or accuracy checking).
+* **Perplexity:** Perplexity AI provides an API (the “Sonar” API) that performs a web search and gives a synthesized answer with cited sources. We call this API with the query; the response likely includes an answer text and possibly source URLs. The backend will extract the answer text (and we should keep the sources for reference or accuracy checking).
+* **Error Handling & Rate Limits:** The backend should handle API errors or timeouts. For MVP, using try/except and simple retry on failure is sufficient. Rate limiting can be managed by spacing out calls or using the API’s recommended wait times if any. Since the number of queries is moderate, this is usually within limits of these services (we must also budget for API costs per call).
+* **Normalization:** Each model’s answer format might differ (Perplexity might include references in text). The backend can strip out any extraneous metadata and just keep the core answer content for analysis. We also annotate each answer with the model name and the query it corresponds to, then store these raw responses in the database for record-keeping.
+
+All these API keys (OpenAI, Anthropic, Perplexity) are stored securely (e.g. as environment variables or in Supabase’s secure vault) and never exposed to the client. The Lovable front-end would trigger the backend calls (for example, by invoking a secure endpoint or an RPC function in Supabase), and the heavy lifting happens server-side in Python.
+
+### 3. Analyzing AI Responses
+
+Once the responses from all models are collected, the backend performs a multi-faceted analysis on the text. This analysis is crucial to turn the raw answers into insights:
+
+Analyzing AI Responses
+This section details how the backend system will analyze AI-generated answers to audit brand perception across multiple dimensions. For each dimension below, we describe what it measures conceptually and how the system will compute it from raw model outputs (e.g. responses from ChatGPT, Claude, Perplexity). The goal is to quantify how prominently and positively the brand is portrayed across different AI models and user contexts, guiding our platform’s analytics and recommendations.
+Brand Mention Frequency
+This metric tracks how often the target brand’s name (and its key competitors’ names) appear in the AI responses. High mention frequency indicates strong brand visibility or “share of voice” in AI outputs, whereas low frequency may reveal a visibility gap. By comparing the brand’s mention count to competitors, we gauge relative prominence. This helps answer “How visible is our brand in AI answers, and are competitors being mentioned more often?”
+Computation approach:
+Identify brand and competitors: The system will maintain a list of the brand name (including variations) and competitor names to scan for in text.
+
+
+Count occurrences: For each AI model’s answer to each question, count the occurrences of the brand name and competitor names. We will record whether the brand was mentioned at least once in the answer (for percentage calculations) and the total number of mentions.
+
+
+Aggregate frequency: Sum up the mentions per model and overall. For example, if we asked 70 questions and the brand appeared in 51 of the answers, that yields a 73% appearance rate in responses. Similarly, compute the percentage of answers mentioning each competitor.
+
+
+Compare and rank: Generate a visibility leaderboard that ranks the brand against competitors by mention frequency (e.g. Brand appears in 73% of answers vs. Competitor A in 41%, Competitor B in 37%, etc.). This captures the brand’s share of total brand mentions across the answers.
+
+
+Output: For each model and in total, report the percentage of answers that include the brand. For instance, one model might mention the brand in nearly all its answers while another model references it less than half the time. Consistently higher mention rates indicate the brand is top-of-mind in AI-generated content, whereas lower rates or higher competitor mentions signal areas for improvement.
+
+
+
+Persona Visibility Mapping
+The platform will map brand mentions to specific user personas to see how visible and appealing the brand is to different customer archetypes. In our use-case, each question posed to the AI models is associated with a certain user persona (e.g. Mindful Academic, Creative Writer, Design Professional, etc.), representing that persona’s typical query. This dimension answers “Which audience segments (personas) see our brand featured in AI answers, and how favorably?” It highlights whether the brand’s presence is skewed toward certain user groups’ questions and if any personas are underserved.
+Computation approach:
+Categorize Q&A by persona: Each query in the test set is tagged with a persona. The system groups the AI responses according to these persona labels. For example, gather all answers to questions from the Student persona, Professional Writer persona, etc.
+
+
+Calculate mention frequency per persona: For each persona group, calculate how many of the answers mention the brand. This yields a percentage of that persona’s queries for which the brand appears in the answer. For instance, we might find the brand is mentioned in 84% of answers to Mindful Academic questions but only 64% for Digital Minimalist Designer queries. A higher percentage means the brand is highly visible to that persona’s concerns, whereas a low percentage indicates the brand rarely comes up as a solution for that persona.
+
+
+
+Compare personas: Rank or highlight personas by brand visibility and sentiment. The system will identify which persona has the highest brand engagement (e.g. “Multi-Project Creative Writer leads in brand mentions”) and which has the lowest. We will also note if the distribution is even or if there are sharp differences. A relatively even distribution means the brand has broad appeal; uneven results show niche appeal or potential missed segments.
+
+
+Output: A persona-by-persona breakdown, e.g. a table or list showing each persona, the percentage of that persona’s questions where the brand appears. For instance, the analysis might reveal the brand is mentioned more times with creative professional personas but has low visibility for cost-conscious student personas – a strategic insight for marketing focus.
+
+
+Topic-Level Visibility
+In addition to personas, we analyze topic-level associations to see which themes or needs the brand is commonly linked with in AI responses. This answers “What key topics or use-cases cause the AI to mention our brand, and where are the gaps?” By extracting common topics (e.g. “distraction-free note-taking”, “cloud storage for notes”, “student-friendly features”), we can measure how often the brand is brought up in each context. A high association with a topic indicates the brand is known (by the AI) for that area; a low association might flag a missed opportunity or a domain where competitors overshadow the brand.
+Computation approach:
+Measure brand association per topic: For each topic, calculate the frequency that the brand appears in answers about that topic. Typically this could be measured as the percentage of answers on that topic that mention the brand at least once. For example, the system might find that for the topic “distraction-free document annotation,” the brand is mentioned in 83% of relevant answers, whereas for “student-friendly digital note-taking,” the brand appears in only around 68–77% of answers. If a topic has multiple competitor mentions but few brand mentions, that indicates a gap in brand visibility for that theme.
+
+
+Compare topics: Highlight topics with strongest and weakest brand visibility. The analysis might show, for instance, that the brand is highly associated with organized workflow and creative use-cases, but less so with student or education-related use-cases. As an example, one report noted that “creative and professional tablets” had strong brand mentions alongside “distraction-free annotation”, whereas “student-oriented tablet solutions” showed relatively lower brand engagement. Such findings direct the brand to areas where it is well-known vs. where awareness could be improved.
+
+
+Output: A list of key topics with an associated metric (percentage or count) of brand mentions. This could be presented as a chart of topic vs. brand visibility. We will also interpret the results: e.g. “The brand frequently appears in answers about paper-like note-taking devices and digital notebooks for creatives, but is less visible for tablets with adjustable reading lights (a feature where competitors are mentioned more).” This topic-level view helps identify what attributes or scenarios the AI models link the brand to, aligning with or deviating from the brand’s desired positioning.
+
+
+Source Domain Analysis
+For models that cite external sources (all models in our case), the platform will analyze which domains and types of sources are being referenced when the brand is mentioned. This addresses “Where is the AI getting information about our brand, and what kind of sources influence its answers?” The rationale is that the credibility and angle of cited sources (news articles, forums, official sites, etc.) can shape the narrative around the brand. Understanding the source domains can highlight any bias (e.g. heavy reliance on tech news vs. academic reviews) and potential gaps in the information ecosystem.
+Computation approach:
+Extract cited URLs: The backend will parse the responses from AI models (like Perplexity) that provide citation links alongside their answers. We will collect all URLs that are referenced when answering brand-related queries. For other models that don’t give explicit links (ChatGPT/Claude), this step may not apply, though if any source names are mentioned in text (e.g. “according to TechRadar…”), those could be noted.
+
+
+Domain categorization: For each collected URL, extract the domain name (e.g. zdnet.com, youtube.com, reddit.com). We will classify each domain into a category bucket such as: News/Media, Business/Corporate (includes official company sites or product pages), Blogs/Content sites, Forums/Community, Educational, Social Media, E-commerce/Reviews, etc. This classification can be done via a predefined mapping (for known popular sites) or using an API/heuristic (e.g. checking if domain ends in .edu for educational, etc.).
+
+
+Count and rank domains/categories: Tally how many times each domain appears in the citations, and aggregate counts by category. This yields statistics like: X citations from news sites, Y from business sites, Z from forums, etc. Often, one category may dominate. For example, we might find news and media sources dominate the citations, suggesting the model relies heavily on timely information sources. The next largest category might be business or service sites (e.g. company blogs, product pages), indicating authoritative or promotional content is also influencing answers. If educational or community references are minimal, that indicates a gap – the brand might not be present in those discussions or the model isn’t retrieving from those areas.
+
+
+Interpretation: The mix of source domains can explain why a model portrays the brand a certain way. For instance, a heavy skew toward tech news sites might mean the answers emphasize recent product announcements or reviews. If many citations come from forums or social media, the tone might include user opinions or niche use-cases. An absence of academic or educational sources might mean benefits for students or research aren’t highlighted by the AI.
+
+
+Output: A summary of source influence, e.g. “Out of 300 cited sources across answers, 60% were News/Media sites, 20% Official/Business sites, 10% Blogs, with very few from Educational or Community forums.” We will list top individual domains by citation count as well (for example, ZDNet (61 mentions), YouTube (59), CNET (53), etc. in one analysis). This informs the brand where the AI is “learning” about them, and possibly where increasing content presence could help (if important categories like educational sites are underrepresented).
+
+
+Model-Specific Differences
+This component highlights how each AI model differs in its treatment of the brand. Since we are auditing multiple AI systems (e.g. ChatGPT vs. Claude vs. Perplexity), it’s crucial to note variations in brand mention frequency, sentiment, and topical focus between them. Each model has unique training data or retrieval methods, so they may not uniformly represent the brand. This analysis answers “How does brand perception vary from one AI model to another?” and helps pinpoint which models are more favorable or aligned with the brand messaging.
+Computation approach:
+Per-model metrics: The system will compile all the aforementioned metrics (mention frequency, sentiment scores, etc.) separately for each AI model. For example, we calculate what percentage of that model’s answers included the brand,
+Compare mention rates: Identify differences in how often each model brings up the brand. One model might mention the brand almost every time it’s relevant, while another might prefer competitors. (In our tests, we might see e.g. Model A mentions the brand in 99% of answers, whereas Model B does so in only ~63%.) We will highlight these disparities, as they indicate which AI platform currently “favors” the brand in its answers.
+
+
+Topic focus differences: Using the topic visibility data, check if models differ in the context they mention the brand. It could be that Model 1 often mentions the brand when talking about “creative workflows” but rarely for “student note-taking,” whereas Model 2 might mention it across a broader range of topics. Any such skew will be noted. This can be linked to the model’s source domain as well – e.g. a retrieval-based model might surface the brand mostly for topics well-covered in its sources.
+
+
+Competitor mentions by model: Also observe if some models mention competitors more frequently in answers, which could indicate that model’s knowledge cutoff or training gives more weight to those competitors. For example, maybe Perplexity (with live data) mentions a new competitor product more often than ChatGPT does.
+
+
+Output: A comparative summary outlining each model’s behavior. This could be a matrix or a narrative: e.g. “Claude has the highest brand mention rate and mostly positive tone, suggesting it heavily endorses the brand in answers. Perplexity cites the brand less frequently and often mentions Competitor X for certain queries, possibly due to its use of up-to-date sources. ChatGPT falls in between, with moderate mention frequency and generally neutral descriptions.” By highlighting such differences, the platform can advise the brand on which AI assistant might need more attention (e.g. updating content or FAQs so that model includes the brand more often or accurately).
+
+
+
+
+
+### 6. Data Storage & Management
+
+Throughout the backend process, Supabase will be used to store data persistently. The schema might include tables such as:
+
+* **Audit (Project)**: stores each audit job with an ID, user\_id, brand\_name, timestamp, status, overall score, etc.
+* **Queries**: each row has an audit\_id, persona description, query text, query type label.
+* **Responses**: each row links to a query and model, and stores the raw response text, plus initial analysis (sentiment score, tone, flags).
+* **Topics/Keywords**: a table of important topics found, linking to audit (or this could be a JSON field in Audit if simpler).
+* **Score Breakdown**: could store the sub-metrics (visibility %, sentiment avg, etc.) for transparency.
+* **Recommendations**: each with an audit\_id and text of recommendation (and maybe a category label).
+
+Using Supabase’s Postgres means we can write SQL or use their client libraries to query this data easily for the dashboard. Lovable’s integration can even auto-generate parts of the schema from descriptions, speeding up development. We will implement row-level security so each user’s data is isolated.
+
+For an MVP built in a few weeks, this backend approach is very feasible: it relies on existing AI APIs and Python libraries (no training custom ML models from scratch), and uses a serverless database that can be set up quickly. The complexity lies in orchestrating calls and parsing responses, which Python handles well with its mature HTTP and NLP ecosystem.
+
+**Development Note:** We would likely develop the backend iteratively – first get the basic querying working for one model, then add others, then implement scoring. Each piece can be tested independently (e.g. verify that calling GPT-4 for a sample query returns expected content, etc.). By reusing as much off-the-shelf tooling as possible, we keep the timeline short.
+
+## Frontend User Experience (Supabase + Lovable)
+
+The user experience is designed to be intuitive and guided, so that even non-technical brand managers can use the platform to get insights quickly. We use **Lovable** (an AI-assisted app builder) to construct a clean UI, integrated with Supabase for data and auth. The front-end flow will be roughly as follows:
+
+### Onboarding & Authentication
+
+When users first visit the web app, they’ll go through a brief onboarding:
+
+* **Sign Up / Login:** Users create an account (email/password or OAuth) – Supabase Auth provides this out-of-the-box, and Lovable can drop in a pre-built auth screen. This ensures each user’s projects are private.
+* **Welcome Screen:** After login, a welcome page explains what the tool does and perhaps showcases a sample insight (e.g. “See how your brand appears on ChatGPT”). This sets expectations and encourages them to start an analysis.
+* Optionally, a short tutorial or tooltip tour can highlight the major sections (Lovable likely can generate a guided tour if asked, or we keep it simple). Since the UI is straightforward (form → results dashboard), the learning curve is small.
+
+### Input & Project Setup
+
+The core action is to start a new **Brand Audit**:
+
+* The user is prompted to **“Enter a Brand or Product to analyze.”** This is a simple form field, possibly with suggestions or examples shown (e.g. “Nike”, “Tesla Model 3”, etc.). We also allow an optional field: **“Competitors (optional):”** where they can list one or two competitor names separated by commas. A brief helper text might say “Competitors are used to compare visibility in AI answers.” If the user leaves it blank, our system might try to auto-suggest competitors (e.g. using a quick lookup or later via the queries themselves), but for MVP it’s fine to proceed without.
+* There might be a dropdown or tags to select the **scope** of the analysis: “Whole Brand vs Specific Product”. If they entered a company name, we assume brand-level; if a product, we might automatically know (or user can clarify). This could tweak the query generation slightly (brand-level includes more product-comparison questions, product-level focuses on that item and close alternatives).
+* Once the user submits the form, a new Audit record is created in the database (status = “draft” initially). The next screen is the **Persona & Query setup**.
+
+### Persona & Query Editing Screen
+
+Here the user sees the list of personas and queries that have been generated for their input. The layout might be something like a card for each persona: with a persona title and icon, a short description, and a list of the questions under that persona. Each question could be in an editable text box or a list item with an edit button. The user can:
+
+* Edit the text of any query (for example, change “Is Brand X worth buying?” to “Is Brand X worth it for students?” to fit a scenario they care about).
+* Remove queries or whole personas not relevant (maybe they feel a certain angle is not needed).
+* Add a new query: There could be an “+ Add Question” button under a persona or a generic “Add Query” that lets them input a custom question (possibly they have a very specific prompt in mind). We could also allow “Add Persona” which would create a new persona category with its own questions – for MVP, adding individual queries is easier to implement than a whole new persona grouping, but we can simulate it by just adding more queries.
+
+To assist the user, each persona card might have an info tooltip explaining the rationale (e.g. *“Price-Sensitive Shopper – to see if AI considers your brand a good value compared to others”*). This educates the user on why those questions are being asked. Lovable’s UI can be directed to create such cards and form elements via its chat-based design interface.
+
+Once satisfied, the user clicks **“Run Audit”** (or “Start Analysis”). At this moment, the front-end will trigger the backend process. Implementation-wise, this could be done by calling a Supabase **Edge Function** (which internally calls our Python logic) or by inserting a record into a `tasks` table that a backend worker watches. For simplicity, we might directly call a secure HTTPS endpoint exposed by the Python service. Lovable can be configured to call APIs or Supabase RPC functions in response to button clicks. We ensure a loading state is communicated to the user.
+
+### Audit Execution & Progress UX
+
+After clicking Run, the user is taken to a **Progress** screen. Since the analysis might take on the order of tens of seconds (depending on number of queries and model response times), we need to keep the user informed:
+
+* Show a loading spinner or progress bar. We can update a text like “Fetching answers from AI models… (3 of 15 queries completed)” to give a sense of progress. If using Supabase’s real-time, our backend could update a field in the Audit record like `queries_completed` and the front-end could subscribe to that. If not, polling the status every few seconds via an API call works too.
+* Possibly display fun or informative tidbits while waiting, e.g., *“Analyzing how ChatGPT views your brand…”,* to keep engagement. Since MVP timeline is short, a simple spinner and “Analyzing...” message is fine.
+
+Once the backend finishes (status flips to “completed” and all results are stored), the UI automatically navigates to the **Results Dashboard**. If an error occurs (e.g., APIs failed), we handle it gracefully by showing an error state (“Oops, something went wrong. Please try again or adjust queries.”) – but assuming things go well, the user sees the full results.
+
+### Results Dashboard
+
+The dashboard is the heart of the UX, presenting complex analysis in an easy-to-digest format. We will use clear headings, charts, and labels to communicate the findings. The dashboard page can be broken into sections (which can be vertically stacked or tabbed):
+
+**1. Overview Section:**
+At the top, prominently display the **Visibility + Influence Score** for the brand. This could be a large number or a gauge. For example: **“Brand X Visibility+Influence Score: 65/100”**. If we have a competitor benchmark, we might also show *“Competitor Y: 80”* next to it (or at least mention in text, e.g., “Competitor Y scored higher, indicating stronger presence in AI results”). We’ll include a short subtitle explaining the score, like *“Measures how often and how favorably Brand X appears in AI answers relative to competitors.”* A small info icon can pop up a tooltip with more detailed explanation of the score formula.
+
+Below that, a **summary sentence** or two: e.g., *“Brand X was mentioned in 60% of relevant AI queries and is generally described positively, but it’s often overshadowed by Competitor Y on technical features.”* This gives a quick takeaway. We can generate this summary dynamically from the data (possibly using a template or even an LLM for eloquence).
+
+We might also show a **timeline sparkline or mini-chart** if the brand has past audits, indicating trend of the score. For MVP, if this is the first run, no trend is shown; but if multiple, a small line chart “Score over time” can appear here or in a “History” section below. This addresses the trackability over time in a visual way.
+
+**2. Multi-Model Comparison:**
+We dedicate a part of the dashboard to compare how each AI model responded. There are a couple of ways to display this:
+
+* A **tabbed view** where the user can click “ChatGPT”, “Claude”, “Perplexity” to see specifics for each. For each model, we show that model’s logo (for recognition) and a summary like *“ChatGPT: Mostly positive, detailed answers. Topics: X, Y, Z. Mentions Competitor Y often.”* versus *“Perplexity (web): Very factual, up-to-date info. Mentioned Brand X in 3/5 queries.”*, etc. This textual summary can be generated from the analysis tables.
+* Alternatively, a **side-by-side card** for each model in one view (if space permits, or on wide screens). Each card could have a small pie chart or bar showing sentiment distribution for that model’s answers (e.g. 3 positive, 2 neutral), and a bullet list of notable findings (e.g. “Strength: highlighted easy-to-use; Weakness: called out limited customization”). These findings come from parsing the content (like the HubSpot vs Salesforce example where ChatGPT had specific perceptions). This gives the user insight into each AI’s “mindset” about the brand.
+
+**4. Topic Clusters / Brand Portrayal:**
+Here we illustrate the key topics and attributes linked with the brand in the AI responses. One approach is a **word cloud** where words like “affordable”, “battery life”, “customer service” appear, with size indicating frequency. Another approach is listing 3-5 top topics with a brief note. For example:
+
+* **Pricing & Value:** frequently mentioned (AI often refers to Brand X as cost-effective).
+* **Product Quality:** mixed mentions (quality praised, but some issues noted about durability).
+* **Features (Technology):** strong presence (AI highlights innovative features of Brand X).
+* **Customer Service:** minor mentions (e.g., “Brand X support is decent but not exceptional” from one answer).
+
+We could even arrange these in a quadrant or cluster diagram if tools allow: maybe cluster positive topics vs negative topics. But for MVP, simple text or list is fine. The main point is to show what **ideas the AI associates** with the brand. This helps the user see if their key messaging is getting through or if the AI is focusing on the wrong things.
+
+**5. Detailed Q\&A (Drill-down):**
+While the above sections give summary metrics, some users will want to read the actual AI answers to understand context. Thus, we provide an expandable section or a separate page where all the **queries and responses** are listed. This could be structured by persona or by query: e.g., under “Price-Sensitive Shopper” persona, list the question and then a collapsible panel with ChatGPT’s answer, Claude’s answer, etc. Each answer snippet might have icons or color highlights indicating sentiment (green happy face for positive, red sad for negative, etc.), and small warning icons if something was flagged (hallucination or outdated). The user can read exactly what was said. This transparency builds trust in the analysis and can sometimes reveal nuances (maybe the sentiment was tagged neutral but when reading the answer, the user might interpret it differently – they can judge themselves).
+
+We will format the answers cleanly, perhaps quoting the AI, and cite if needed (for Perplexity, maybe provide a link to the sources it used, if available). This section can be hidden by default if we worry about clutter, but easily accessible.
