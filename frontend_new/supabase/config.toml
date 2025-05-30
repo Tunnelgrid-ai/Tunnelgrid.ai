@@ -1,8 +1,0 @@
-
-project_id = "tdaosoupsxmrextxdqbn"
-
-[functions.send-meeting-notification]
-verify_jwt = false
-
-[functions.verify-email-exists]
-verify_jwt = false

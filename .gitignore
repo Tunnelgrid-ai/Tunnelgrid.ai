@@ -26,9 +26,4 @@ node_modules/
 
 # Task files
 tasks.json
-tasks/
-
-# Old frontend directories (legacy submodule references)
-frontend/
-frontend_backup/
-frontend_old/ 
+tasks/ 
