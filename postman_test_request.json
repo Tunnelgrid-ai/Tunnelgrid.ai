@@ -1,0 +1,248 @@
+{
+  "info": {
+    "name": "AI Brand Analysis - Generate Questions",
+    "description": "Test the questions generation API with 7 personas and 10 topics"
+  },
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8000/api/questions/generate",
+    "headers": [
+      {
+        "key": "Content-Type",
+        "value": "application/json"
+      }
+    ],
+    "body": {
+      "mode": "raw",
+      "raw": {
+        "auditId": "32e70d47-d373-4775-9ab3-16a97307d590",
+        "brandName": "Lovable",
+        "brandDescription": "AI-powered web development platform",
+        "brandDomain": "lovable.dev",
+        "productName": "Web Development",
+        "topics": [
+          {
+            "id": "53039244-50d1-42c2-8137-a04b126e0808",
+            "name": "Development Quality Perception",
+            "description": "Consumer opinions on the quality, reliability, and functionality of websites developed by Lovable"
+          },
+          {
+            "id": "f54a758d-33a4-41ae-a0a6-10aeedbad786",
+            "name": "Pricing Competitiveness Analysis",
+            "description": "Consumer perceptions of Lovable's web development pricing in comparison to industry standards and competitors"
+          },
+          {
+            "id": "b1f7cb2b-f2e2-4c59-8dac-a7eef950618a",
+            "name": "Customer Support Experience",
+            "description": "Consumer experiences and satisfaction with Lovable's customer support during and after web development projects"
+          },
+          {
+            "id": "cd2c43cd-3f49-4316-a73b-30957863f643",
+            "name": "Trust and Credibility Assessment",
+            "description": "Consumer perceptions of Lovable's trustworthiness, professionalism, and expertise in web development"
+          },
+          {
+            "id": "42dd9b64-da6f-430d-b5c6-2a95f17d3ac9",
+            "name": "Innovation and Trend Adoption",
+            "description": "Consumer opinions on Lovable's adoption and integration of the latest web development trends and technologies"
+          },
+          {
+            "id": "ac653fc2-b70a-461d-aad2-6afb8cf8b63f",
+            "name": "Project Timeline Satisfaction",
+            "description": "Consumer satisfaction with the timelines and deadlines set by Lovable for web development projects"
+          },
+          {
+            "id": "ad17e640-7fbd-4360-b469-e48c0f6b1a71",
+            "name": "Communication Effectiveness",
+            "description": "Consumer experiences with Lovable's communication style, transparency, and responsiveness during web development projects"
+          },
+          {
+            "id": "c372b1f6-6858-403c-86a3-2f70856fa1a5",
+            "name": "Design and User Experience",
+            "description": "Consumer opinions on the aesthetic and functional design of websites developed by Lovable"
+          },
+          {
+            "id": "a94534d0-4c95-43fe-9222-a91066c1131c",
+            "name": "Post Launch Support Evaluation",
+            "description": "Consumer experiences with Lovable's support and maintenance services after the launch of a web development project"
+          },
+          {
+            "id": "456219ac-15a1-4d5e-ba9e-fc16ed1b7817",
+            "name": "Overall Satisfaction and Loyalty",
+            "description": "Consumer overall satisfaction with Lovable's web development services and their likelihood to recommend or return for future projects"
+          }
+        ],
+        "personas": [
+          {
+            "id": "1b5a734e-d809-499e-af9c-ab8a04a7e329",
+            "name": "Tech Savvy Entrepreneur",
+            "description": "Ambitious entrepreneurs who need high-quality web development services to launch and grow their online businesses, with a focus on innovation, scalability, and user experience",
+            "painPoints": [
+              "Difficulty finding reliable developers",
+              "Limited budget for development",
+              "Need for fast time-to-market"
+            ],
+            "motivators": [
+              "Innovative solutions",
+              "Competitive pricing",
+              "Quick project turnaround"
+            ],
+            "demographics": {
+              "ageRange": "25-40",
+              "gender": "All genders",
+              "location": "Urban areas",
+              "goals": [
+                "Launch online business",
+                "Increase revenue streams"
+              ]
+            }
+          },
+          {
+            "id": "8dc2381f-f9e2-4483-abd1-3e61792e9263",
+            "name": "Design-Conscious Business",
+            "description": "Established businesses that prioritize design and user experience in their web development projects, seeking to enhance their brand image and customer engagement",
+            "painPoints": [
+              "Poor design quality from previous developers",
+              "Difficulty communicating design vision",
+              "Need for consistent brand identity"
+            ],
+            "motivators": [
+              "High-quality design",
+              "Effective communication",
+              "Attention to detail"
+            ],
+            "demographics": {
+              "ageRange": "30-50",
+              "gender": "All genders",
+              "location": "Suburban areas",
+              "goals": [
+                "Improve brand image",
+                "Enhance customer experience"
+              ]
+            }
+          },
+          {
+            "id": "7baa9548-b890-440b-bfb9-c446139ce67a",
+            "name": "Budget-Focused Startup",
+            "description": "Early-stage startups with limited budgets, seeking affordable web development services that meet their basic needs and provide a foundation for future growth",
+            "painPoints": [
+              "Limited budget for development",
+              "Difficulty finding affordable options",
+              "Need for basic functionality"
+            ],
+            "motivators": [
+              "Competitive pricing",
+              "Flexible payment plans",
+              "Quick project delivery"
+            ],
+            "demographics": {
+              "ageRange": "20-35",
+              "gender": "All genders",
+              "location": "Urban areas",
+              "goals": [
+                "Launch minimum viable product",
+                "Secure funding for growth"
+              ]
+            }
+          },
+          {
+            "id": "781d9bfc-8d91-4e18-b88f-504032fdbd25",
+            "name": "E-commerce Store Owner",
+            "description": "E-commerce store owners who require web development services to create or improve their online stores, with a focus on functionality, security, and user experience",
+            "painPoints": [
+              "Poor website performance",
+              "Difficulty with payment gateway integration",
+              "Need for secure checkout process"
+            ],
+            "motivators": [
+              "Improved website performance",
+              "Enhanced security features",
+              "Streamlined checkout process"
+            ],
+            "demographics": {
+              "ageRange": "25-45",
+              "gender": "All genders",
+              "location": "Suburban areas",
+              "goals": [
+                "Increase online sales",
+                "Improve customer satisfaction"
+              ]
+            }
+          },
+          {
+            "id": "4c2c5f41-3a6a-4807-a4e6-ae239ee02f6b",
+            "name": "Marketing Agency Partner",
+            "description": "Marketing agencies that partner with web development companies to offer comprehensive services to their clients, seeking reliable and high-quality development services",
+            "painPoints": [
+              "Difficulty finding reliable development partners",
+              "Limited control over development process",
+              "Need for consistent quality"
+            ],
+            "motivators": [
+              "Reliable partnership",
+              "High-quality development services",
+              "Effective communication"
+            ],
+            "demographics": {
+              "ageRange": "28-50",
+              "gender": "All genders",
+              "location": "Urban areas",
+              "goals": [
+                "Expand service offerings",
+                "Improve client satisfaction"
+              ]
+            }
+          },
+          {
+            "id": "b523b8ac-4000-4b30-8440-ed7d68d6a827",
+            "name": "Small Business Owner",
+            "description": "Small business owners who need web development services to establish or improve their online presence, with a focus on simplicity, affordability, and ease of use",
+            "painPoints": [
+              "Limited technical expertise",
+              "Difficulty with website maintenance",
+              "Need for easy updates"
+            ],
+            "motivators": [
+              "Easy-to-use solutions",
+              "Affordable pricing",
+              "Personalized support"
+            ],
+            "demographics": {
+              "ageRange": "25-55",
+              "gender": "All genders",
+              "location": "Rural areas",
+              "goals": [
+                "Establish online presence",
+                "Improve local visibility"
+              ]
+            }
+          },
+          {
+            "id": "a04d6092-13db-41d4-939d-5fa35b2ee480",
+            "name": "Enterprise IT Manager",
+            "description": "IT managers in large enterprises who oversee web development projects, seeking high-quality, scalable, and secure solutions that meet their organization's complex needs",
+            "painPoints": [
+              "Difficulty with complex integration requirements",
+              "Limited control over development process",
+              "Need for robust security features"
+            ],
+            "motivators": [
+              "Scalable solutions",
+              "Advanced security features",
+              "Compliance with industry standards"
+            ],
+            "demographics": {
+              "ageRange": "35-60",
+              "gender": "All genders",
+              "location": "Urban areas",
+              "goals": [
+                "Improve IT infrastructure",
+                "Enhance organizational efficiency"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+} 

@@ -1,0 +1,76 @@
+CURL Command to test Questions Generation API:
+
+curl -X POST http://127.0.0.1:8000/api/questions/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "auditId": "32e70d47-d373-4775-9ab3-16a97307d590",
+    "brandName": "Lovable",
+    "brandDescription": "AI-powered web development platform",
+    "brandDomain": "lovable.dev",
+    "productName": "Web Development",
+    "topics": [
+      {
+        "id": "53039244-50d1-42c2-8137-a04b126e0808",
+        "name": "Development Quality Perception",
+        "description": "Consumer opinions on the quality, reliability, and functionality of websites developed by Lovable"
+      },
+      {
+        "id": "f54a758d-33a4-41ae-a0a6-10aeedbad786",
+        "name": "Pricing Competitiveness Analysis",
+        "description": "Consumer perceptions of Lovable pricing compared to competitors"
+      }
+    ],
+    "personas": [
+      {
+        "id": "1b5a734e-d809-499e-af9c-ab8a04a7e329",
+        "name": "Tech Savvy Entrepreneur",
+        "description": "Ambitious entrepreneurs who need high-quality web development services",
+        "painPoints": ["Difficulty finding reliable developers", "Limited budget for development"],
+        "motivators": ["Innovative solutions", "Competitive pricing"],
+        "demographics": {
+          "ageRange": "25-40",
+          "gender": "All genders",
+          "location": "Urban areas",
+          "goals": ["Launch online business", "Increase revenue streams"]
+        }
+      },
+      {
+        "id": "8dc2381f-f9e2-4483-abd1-3e61792e9263",
+        "name": "Design-Conscious Business",
+        "description": "Established businesses that prioritize design and user experience",
+        "painPoints": ["Poor design quality from previous developers"],
+        "motivators": ["High-quality design", "Effective communication"],
+        "demographics": {
+          "ageRange": "30-50",
+          "gender": "All genders",
+          "location": "Suburban areas",
+          "goals": ["Improve brand image", "Enhance customer experience"]
+        }
+      }
+    ]
+  }'
+
+=== SIMPLE POSTMAN SETUP ===
+
+Method: POST
+URL: http://127.0.0.1:8000/api/questions/generate
+Headers:
+  Content-Type: application/json
+
+Body (copy the JSON from the curl command above, starting from the opening brace after -d)
+
+=== EXPECTED RESPONSE ===
+
+Success Response:
+{
+  "success": true,
+  "questions": [...array of question objects...],
+  "source": "ai" or "ai_chunked",
+  "processingTime": 12345,
+  "tokenUsage": 1000
+}
+
+Error Response:
+{
+  "detail": "AI question generation failed: [error_reason]. Please try again later."
+} 

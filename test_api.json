@@ -1,0 +1,47 @@
+{
+  "auditId": "test-audit-123",
+  "brandName": "Metrolinx",
+  "brandDescription": "Provincial transit agency providing GO Transit and UP Express services",
+  "brandDomain": "metrolinx.com",
+  "productName": "GO Transit Services",
+  "topics": [
+    {
+      "id": "topic-1",
+      "name": "Service Reliability",
+      "description": "Punctuality and consistency of transit services"
+    },
+    {
+      "id": "topic-2", 
+      "name": "Customer Experience",
+      "description": "Overall passenger satisfaction and service quality"
+    }
+  ],
+  "personas": [
+    {
+      "id": "persona-1",
+      "name": "Daily Commuter",
+      "description": "Regular commuters who rely on GO Transit for their daily work travel",
+      "painPoints": ["Long wait times", "Service delays", "Crowded trains"],
+      "motivators": ["Reliable schedule", "Comfortable journey", "Cost effectiveness"],
+      "demographics": {
+        "ageRange": "25-45",
+        "gender": "Mixed",
+        "location": "GTA suburbs",
+        "goals": ["Get to work on time", "Avoid traffic stress"]
+      }
+    },
+    {
+      "id": "persona-2",
+      "name": "Family Traveler",
+      "description": "Families using GO Transit for weekend trips and special events",
+      "painPoints": ["Complex ticketing", "Limited family amenities", "Safety concerns"],
+      "motivators": ["Family-friendly service", "Convenience", "Safety"],
+      "demographics": {
+        "ageRange": "30-50",
+        "gender": "Mixed",
+        "location": "GTA and surrounding areas",
+        "goals": ["Safe family travel", "Affordable outings"]
+      }
+    }
+  ]
+} 

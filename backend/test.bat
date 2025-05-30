@@ -1,0 +1,16 @@
+@echo off
+echo Testing Python...
+python --version
+echo.
+echo Testing Python import...
+python -c "print('Python is working')"
+echo.
+echo Testing FastAPI import...
+python -c "import fastapi; print('FastAPI is available')"
+echo.
+echo Testing app import...
+python -c "import app; print('App module is available')"
+echo.
+echo Testing server start...
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+pause 
