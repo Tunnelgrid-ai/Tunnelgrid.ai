@@ -84,9 +84,13 @@ async def search_brands(q: str = Query(..., min_length=1, description="Search qu
                 # Ensure each brand has the required fields for frontend
                 formatted_brands = []
                 for brand in brands:
+                    domain = brand.get("domain", "unknown.com")
                     formatted_brand = {
                         "name": brand.get("name", "Unknown"),
-                        "domain": brand.get("domain", "unknown.com"),
+                        "domain": domain,
+                        # Use a reliable logo service that doesn't require authentication
+                        # Logo.dev image API with secret key doesn't work, so use alternative
+                        "logo": f"https://logo.clearbit.com/{domain}" if domain and domain != "unknown.com" else None
                     }
                     formatted_brands.append(formatted_brand)
                 

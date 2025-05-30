@@ -35,9 +35,7 @@ export function useSearch({ onSelectBrand }: UseSearchProps) {
               id: item.domain || item.name,
               name: item.name,
               domain: item.domain,
-              logo: item.domain
-                ? `https://img.logo.dev/${item.domain}?token=${import.meta.env.VITE_LOGODEV_PUBLISHABLE_KEY}&size=40&format=png`
-                : undefined,
+              logo: item.logo,
             }));
             setFilteredBrands(brands);
           } else {
