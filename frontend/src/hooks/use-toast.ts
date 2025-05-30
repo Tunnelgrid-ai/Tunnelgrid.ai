@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-empty-interface */
+ 
 import * as React from "react"
 import { type ToastActionElement, type ToastProps } from "@/components/ui/toast"
 
