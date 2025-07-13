@@ -68,9 +68,9 @@ def get_groq_api_key() -> Optional[str]:
 
 def create_question_generation_prompt(brand_name: str, brand_description: Optional[str], brand_domain: str, 
                                     product_name: str, topics: List[Dict], personas: List[Dict]) -> str:
-    """Create a comprehensive prompt for question generation"""
+    """Create a comprehensive prompt for industry-focused question generation (brand info ignored to avoid bias)"""
     
-    # Build topics context
+    # Build topics context with more industry focus
     topics_context = "\n".join([
         f"- {topic.get('name', 'Unknown')}: {topic.get('description', 'No description')}"
         for topic in topics
@@ -100,13 +100,7 @@ def create_question_generation_prompt(brand_name: str, brand_description: Option
         
         personas_context += persona_info
     
-    brand_desc_text = f" - {brand_description}" if brand_description else ""
-    
-    prompt = f"""You are an expert market researcher generating customer questions for brand analysis research.
-
-BRAND CONTEXT:
-- Brand: {brand_name} ({brand_domain}){brand_desc_text}
-- Product/Service: {product_name}
+    prompt = f"""You are an expert market researcher generating customer questions for industry analysis research.
 
 TOPICS TO ANALYZE:
 {topics_context}
@@ -114,20 +108,27 @@ TOPICS TO ANALYZE:
 CUSTOMER PERSONAS:
 {personas_context}
 
-TASK: Generate exactly 10 insightful customer questions for EACH persona that would help understand how that specific persona perceives the brand and product. Each question should:
+TASK: Generate exactly 10 insightful questions for EACH persona that they would naturally ask when researching solutions in these industry topics. Each question should:
 
 1. Be written from the persona's perspective and reflect their specific characteristics, pain points, and motivators
-2. Focus on brand perception, product evaluation, and decision-making factors
-3. Be specific to the brand and product context
-4. Help understand potential concerns, preferences, and decision drivers for that persona type
-5. Be actionable for market research purposes
+2. Focus on industry evaluation, solution comparison, and decision-making factors
+3. Be general industry questions that would naturally mention brands, tools, or services when answered
+4. Help understand what brands/solutions each persona type naturally considers and why
+5. Sound like real questions this persona would ask when researching options
 
 CRITICAL REQUIREMENTS:
 - Generate exactly 10 questions per persona (Total: {len(personas) * 10} questions)
 - Each question must include the exact persona ID from the context
 - Make questions persona-specific (reflect their pain points, motivators, demographics)
 - Questions should sound natural as if the persona is asking them
-- Focus on brand/product evaluation, not general advice
+- Focus on industry research, not specific brand evaluation
+- Questions should naturally elicit brand/tool mentions when answered by AI
+
+EXAMPLES OF GOOD INDUSTRY-FOCUSED QUESTIONS:
+- "What are the best no-code website builders for someone with no technical background?"
+- "Which project management tools do most startups prefer and why?"
+- "What CRM solutions offer the best value for small businesses under 50 employees?"
+- "Which email marketing platforms have the highest deliverability rates?"
 
 OUTPUT FORMAT (JSON array only, no additional text):
 [

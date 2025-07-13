@@ -46,7 +46,7 @@ class Question(BaseModel):
     personaId: str
     auditId: str
     topicName: Optional[str] = None
-    queryType: Optional[str] = "brand_analysis"
+    queryType: Optional[str] = "industry_analysis"
 
 class QuestionsResponse(BaseModel):
     """Response model for questions generation"""

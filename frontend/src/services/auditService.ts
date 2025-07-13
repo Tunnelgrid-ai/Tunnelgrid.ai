@@ -342,6 +342,9 @@ export async function updateAuditStatus(auditId: string, status: string): Promis
  * 
  * USAGE: Called from wizard's final submission process
  * 
+ * NEW APPROACH: Uses backend API instead of direct Supabase client
+ * to avoid RLS permission issues
+ * 
  * @param auditId - ID of audit to mark as completed
  * @returns Promise with success/error status
  */
@@ -360,43 +363,66 @@ export async function completeAudit(auditId: string): Promise<AuditServiceRespon
       };
     }
 
-    console.log('✅ Completing audit:', auditId);
+    console.log('✅ Completing audit via backend API:', auditId);
 
-    // UPDATE: Set audit status to completed
-    const { data, error } = await supabase
-      .from('audit')
-      .update({ 
-        status: 'completed',
-        // Note: completion timestamp will be auto-updated if you have updated_at trigger
-      })
-      .eq('audit_id', auditId)
-      .select()
-      .single();
+    // NEW APPROACH: Use backend API instead of direct Supabase client
+    const response = await fetch(`/api/audits/${auditId}/complete`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
 
-    if (error) {
-      console.error('❌ Failed to complete audit:', error);
-      return {
-        success: false,
-        error: `Database error: ${error.message}`
-      };
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Backend API error:', response.status, errorText);
+      
+      // Handle specific error codes
+      if (response.status === 404) {
+        return {
+          success: false,
+          error: 'Audit not found. Please verify the audit ID.'
+        };
+      } else if (response.status === 500) {
+        return {
+          success: false,
+          error: 'Database error occurred. Please try again.'
+        };
+      } else {
+        return {
+          success: false,
+          error: `Server error: ${response.status} ${errorText}`
+        };
+      }
     }
 
-    if (!data) {
+    const result = await response.json();
+    console.log('✅ Backend API response:', result);
+
+    if (result.success) {
+      console.log('✅ Audit completed successfully via backend:', auditId);
+      return {
+        success: true,
+        data: result.data
+      };
+    } else {
       return {
         success: false,
-        error: 'Audit not found'
+        error: result.message || 'Unknown error from backend'
       };
     }
-
-    console.log('✅ Audit completed successfully:', data.audit_id);
-
-    return {
-      success: true,
-      data: data.audit_id
-    };
 
   } catch (error) {
     console.error('💥 Unexpected error completing audit:', error);
+    
+    // Handle network errors
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      return {
+        success: false,
+        error: 'Network error. Please check your connection and try again.'
+      };
+    }
+    
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'

@@ -40,12 +40,23 @@ class Settings:
     GROQ_API_KEY: Optional[str] = os.getenv("GROQ_API_KEY")
     LOGODEV_SECRET_KEY: Optional[str] = os.getenv("LOGODEV_SECRET_KEY")
     
-    # AI Model configuration
+    # AI Model configuration - groq
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama3-70b-8192")
     GROQ_MAX_TOKENS: int = int(os.getenv("GROQ_MAX_TOKENS", "8000"))
     GROQ_TEMPERATURE: float = float(os.getenv("GROQ_TEMPERATURE", "0.7"))
     GROQ_TIMEOUT: float = float(os.getenv("GROQ_TIMEOUT", "60.0"))
-    
+
+    # AI model configuration - openai search models
+    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
+    OPENAI_SEARCH_MODEL: str = os.getenv("OPENAI_SEARCH_MODEL", "gpt-4o-search-preview")
+    OPENAI_SEARCH_MAX_TOKENS: int = int(os.getenv("OPENAI_SEARCH_MAX_TOKENS", "8000"))
+    OPENAI_SEARCH_TEMPERATURE: float = float(os.getenv("OPENAI_SEARCH_TEMPERATURE", "0.7"))
+    OPENAI_SEARCH_TIMEOUT: float = float(os.getenv("OPENAI_SEARCH_TIMEOUT", "60.0"))
+
+    # Web search options configuration
+    OPENAI_SEARCH_USER_LOCATION_COUNTRY: Optional[str] = os.getenv("OPENAI_SEARCH_USER_LOCATION_COUNTRY", "US")
+    OPENAI_SEARCH_USER_LOCATION_CITY: Optional[str] = os.getenv("OPENAI_SEARCH_USER_LOCATION_CITY")
+
     # CORS configuration
     CORS_ORIGINS: list = [
         "http://localhost:3000",    # React dev server
@@ -87,6 +98,11 @@ class Settings:
     def has_logodev_config(self) -> bool:
         """Check if Logo.dev API is properly configured"""
         return bool(self.LOGODEV_SECRET_KEY)
+    
+    @property
+    def has_openai_config(self) -> bool:
+        """Check if OpenAI API is properly configured"""
+        return bool(self.OPENAI_API_KEY)
 
 # Global settings instance
 settings = Settings()
@@ -104,6 +120,9 @@ def validate_configuration():
     
     if not settings.has_logodev_config:
         missing_config.append("Logo.dev API (LOGODEV_SECRET_KEY)")
+
+    if not settings.has_openai_config:
+        missing_config.append("OpenAI API (OPENAI_API_KEY)")
     
     if missing_config:
         raise ValueError(f"Missing required configuration: {', '.join(missing_config)}")

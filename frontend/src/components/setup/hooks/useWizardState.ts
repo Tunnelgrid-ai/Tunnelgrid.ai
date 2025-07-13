@@ -307,15 +307,16 @@ export const useWizardState = () => {
   };
 
   /**
-   * UPDATED: Submit Setup with Audit Completion
+   * UPDATED: Submit Setup with Audit Completion AND AI Analysis
    * 
-   * PURPOSE: Handle final wizard submission and mark audit as completed
+   * PURPOSE: Handle final wizard submission, mark audit as completed, and start AI analysis
    * 
    * WORKFLOW:
    * 1. Validate all required data is present
    * 2. Process final submission (existing logic)
    * 3. Mark audit as 'completed' in database
-   * 4. Show success feedback and redirect
+   * 4. Start AI analysis job
+   * 5. Navigate to analysis loading screen
    */
   const submitSetup = async () => {
     try {
@@ -331,7 +332,14 @@ export const useWizardState = () => {
       }
 
       // STEP 2: Validate required data
-      if (!brandInfo || !products.length || !topics.length) {
+      if (!brandInfo || !products.length || !topics.length || !personas.length || !questions.length) {
+        console.log('❌ Validation failed:', {
+          brandInfo: !!brandInfo,
+          products: products.length,
+          topics: topics.length,
+          personas: personas.length,
+          questions: questions.length
+        });
         toast({
           title: "Incomplete Setup",
           description: "Please complete all steps before submitting.",
@@ -343,32 +351,75 @@ export const useWizardState = () => {
       console.log('🚀 Submitting setup and completing audit:', auditId);
 
       // STEP 3: Complete the audit in database
+      console.log('📝 Calling completeAudit...');
       const { completeAudit } = await import('@/services/auditService');
       const completionResult = await completeAudit(auditId);
 
+      console.log('📋 Audit completion result:', completionResult);
+
       if (!completionResult.success) {
+        console.error('❌ Audit completion failed:', completionResult.error);
         throw new Error(completionResult.error || 'Failed to complete audit');
       }
 
-      // STEP 4: Show success message
+      // STEP 4: Show success message for audit completion
       toast({
         title: "Setup Complete!",
-        description: "Your brand analysis setup has been completed and saved.",
+        description: "Your brand analysis setup has been completed. Starting AI analysis...",
         variant: "default"
       });
 
       console.log('✅ Wizard completed successfully with audit:', auditId);
 
-      // STEP 5: Could add navigation to results page here
-      // navigate('/dashboard') or similar
+      // STEP 5: Start AI analysis
+      console.log('🤖 Starting AI analysis for audit:', auditId);
+      
+      // Import analysis service dynamically to avoid circular dependencies
+      const { runCompleteAnalysis } = await import('@/services/analysisService');
+      
+      // Start the analysis process - this will redirect to loading screen
+      const analysisResult = await runCompleteAnalysis(auditId, (status) => {
+        console.log('📊 Analysis progress:', status.progress_percentage + '%');
+      });
+
+      if (analysisResult.success) {
+        console.log('🎉 AI analysis completed successfully');
+        toast({
+          title: "Analysis Complete!",
+          description: "Your brand analysis has been completed successfully.",
+          variant: "default"
+        });
+        
+        // TODO: Navigate to results page
+        // navigate(`/results/${auditId}`)
+        
+      } else {
+        console.error('❌ AI analysis failed:', analysisResult.success === false ? analysisResult.error : 'Unknown error');
+        toast({
+          title: "Analysis Failed",
+          description: analysisResult.success === false ? (analysisResult.details || "AI analysis encountered an error.") : "AI analysis encountered an error.",
+          variant: "destructive"
+        });
+      }
 
     } catch (error) {
       console.error('💥 Error completing setup:', error);
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // More specific error messages based on the error
+      let userMessage = errorMessage;
+      if (errorMessage.includes('Database error')) {
+        userMessage = 'Database connection issue. Please try again.';
+      } else if (errorMessage.includes('not found')) {
+        userMessage = 'Audit record not found. Please restart the process.';
+      } else if (errorMessage.includes('Failed to complete audit')) {
+        userMessage = 'Unable to complete audit. Please check your connection and try again.';
+      }
+      
       toast({
         title: "Submission Failed",
-        description: errorMessage,
+        description: userMessage,
         variant: "destructive"
       });
     }

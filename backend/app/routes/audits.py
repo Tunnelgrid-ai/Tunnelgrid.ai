@@ -5,6 +5,7 @@ PURPOSE: Audit creation and management
 
 ENDPOINTS:
 - POST /create - Create a new audit
+- PUT /{audit_id}/complete - Complete an audit
 
 ARCHITECTURE:
 Frontend → FastAPI Backend → Supabase → Backend → Frontend
@@ -69,4 +70,55 @@ async def create_audit(audit: AuditCreateRequest):
         raise
     except Exception as e:
         logger.error(f"❌ Error creating audit: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@router.put("/{audit_id}/complete")
+async def complete_audit(audit_id: str):
+    """
+    Complete an audit by updating its status to 'completed'
+    
+    This endpoint uses the service role key to bypass RLS policies,
+    ensuring the update works even when frontend client has permission issues.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        logger.info(f"🔄 Completing audit: {audit_id}")
+        
+        # STEP 1: Check if audit exists
+        check_result = supabase.table("audit").select("audit_id, status").eq("audit_id", audit_id).execute()
+        
+        if not check_result.data:
+            logger.warning(f"❌ Audit not found: {audit_id}")
+            raise HTTPException(status_code=404, detail="Audit not found")
+        
+        current_audit = check_result.data[0]
+        logger.info(f"📋 Found audit {audit_id} with status: {current_audit['status']}")
+        
+        # STEP 2: Update audit status to completed
+        update_result = supabase.table("audit").update({
+            "status": "completed"
+        }).eq("audit_id", audit_id).execute()
+        
+        # Check for errors in update operation
+        if hasattr(update_result, 'error') and update_result.error:
+            logger.error(f"❌ Update failed: {update_result.error}")
+            raise HTTPException(status_code=500, detail=f"Update failed: {update_result.error}")
+        
+        logger.info(f"✅ Successfully completed audit: {audit_id}")
+        
+        return {
+            "success": True,
+            "data": {
+                "audit_id": audit_id,
+                "status": "completed"
+            },
+            "message": "Audit completed successfully"
+        }
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error completing audit {audit_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") 

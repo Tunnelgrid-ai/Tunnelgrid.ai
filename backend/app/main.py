@@ -43,6 +43,7 @@ from .routes.products import router as products_router
 from .routes.audits import router as audits_router
 from .routes.personas import router as personas_router
 from .routes.questions import router as questions_router
+from .routes.analysis import router as analysis_router
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -70,7 +71,8 @@ async def lifespan(app: FastAPI):
     services_status = {
         "supabase": "✅ Available" if settings.has_supabase_config else "❌ Not configured",
         "groqcloud": "✅ Available" if settings.has_groq_config else "❌ Not configured", 
-        "logodev": "✅ Available" if settings.has_logodev_config else "❌ Not configured"
+        "logodev": "✅ Available" if settings.has_logodev_config else "❌ Not configured",
+        "openai_search": "✅ Available" if settings.has_openai_config else "❌ Not configured"
     }
     
     for service, status in services_status.items():
@@ -157,6 +159,12 @@ app.include_router(
     tags=["questions"]
 )
 
+app.include_router(
+    analysis_router,
+    prefix="/api/analysis",
+    tags=["analysis"]
+)
+
 # ROOT ENDPOINT
 @app.get("/")
 async def root():
@@ -175,7 +183,8 @@ async def root():
             "products": "/api/products",
             "audits": "/api/audits",
             "personas": "/api/personas",
-            "questions": "/api/questions"
+            "questions": "/api/questions",
+            "analysis": "/api/analysis"
         }
     }
 
@@ -189,7 +198,8 @@ async def health_check():
         "api": "running",
         "supabase": "available" if settings.has_supabase_config else "unavailable",
         "groqcloud": "available" if settings.has_groq_config else "unavailable",
-        "logodev": "available" if settings.has_logodev_config else "unavailable"
+        "logodev": "available" if settings.has_logodev_config else "unavailable",
+        "openai_search": "available" if settings.has_openai_config else "unavailable"
     }
     
     return HealthResponse(
