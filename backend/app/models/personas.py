@@ -15,7 +15,7 @@ class Demographics(BaseModel):
 class PersonaGenerateRequest(BaseModel):
     """Request model for generating personas via AI"""
     brandName: str = Field(..., min_length=1, max_length=100, description="Brand name")
-    brandDescription: str = Field(..., min_length=1, max_length=500, description="Brand description")
+    brandDescription: str = Field(..., min_length=1, max_length=1000, description="Brand description")
     brandDomain: str = Field(..., min_length=1, max_length=255, description="Brand domain/website")
     productName: str = Field(..., min_length=1, max_length=200, description="Product or service name")
     industry: Optional[str] = Field(None, max_length=100, description="Industry category")

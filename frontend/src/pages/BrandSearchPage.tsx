@@ -90,8 +90,9 @@ const BrandSearchPage = () => {
       return;
     }
 
-    // 2. Call GroqCloud API (Llama 3.1 8B)
-    const groqResponse = await fetch("/api/brands/analyze", {
+    // 2. Call OpenAI API via backend /analyze endpoint
+    // (The backend now uses OpenAI instead of Llama/Groq)
+    const analyzeResponse = await fetch("/api/brands/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -99,14 +100,14 @@ const BrandSearchPage = () => {
         domain: selectedBrand.domain,
       }),
     });
-    const groqResult = await groqResponse.json();
-    if (!groqResponse.ok) {
-      alert("Failed to get brand info: " + (groqResult.detail || "Unknown error"));
+    const analyzeResult = await analyzeResponse.json();
+    if (!analyzeResponse.ok) {
+      alert("Failed to get brand info: " + (analyzeResult.detail || "Unknown error"));
       return;
     }
 
     // 3. Parse and show in UI
-    const { description, product } = groqResult;
+    const { description, product } = analyzeResult;
     setBrandDescription(description);
     setBrandProducts(product);
     console.log(description, product);

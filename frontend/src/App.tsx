@@ -10,7 +10,7 @@ import NotFound from "./pages/NotFound";
 import BrandSetupPage from "./pages/BrandSetupPage";
 import BrandSearchPage from "./pages/BrandSearchPage";
 import ReportsPage from "./pages/ReportsPage";
-import ReportViewPage from "./pages/ReportViewPage";
+import { ComprehensiveReportPage } from "./pages/ComprehensiveReportPage";
 import SettingsPage from "./pages/SettingsPage";
 import AuthPage from "./pages/AuthPage";
 import MyReportsPage from "./pages/MyReportsPage";
@@ -48,7 +48,8 @@ const App = () => (
             <Route path="/setup" element={<BrandSetupPage />} />
             <Route path="/search" element={<BrandSearchPage />} />
             <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/reports/:reportId" element={<ReportViewPage />} />
+            <Route path="/reports/:reportId" element={<ComprehensiveReportPage />} />
+            <Route path="/demo/report" element={<ComprehensiveReportPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/my-reports" element={<MyReportsPage />} />
             <Route path="/auth" element={<AuthRedirect />} />

@@ -9,7 +9,7 @@ class QuestionGenerateRequest(BaseModel):
     """Request model for generating questions via AI"""
     auditId: str = Field(..., description="Associated audit ID")
     brandName: str = Field(..., min_length=1, max_length=100, description="Brand name")
-    brandDescription: Optional[str] = Field(None, max_length=500, description="Brand description")
+    brandDescription: Optional[str] = Field(None, max_length=1000, description="Brand description")
     brandDomain: str = Field(..., min_length=1, max_length=255, description="Brand domain/website")
     productName: str = Field(..., min_length=1, max_length=200, description="Product or service name")
     topics: List[Dict[str, str]] = Field(..., min_items=1, description="List of topics with id, name, description")

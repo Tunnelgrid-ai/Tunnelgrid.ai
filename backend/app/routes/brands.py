@@ -166,93 +166,186 @@ async def create_brand(brand: BrandInsertRequest):
 @router.post("/analyze", response_model=BrandLlamaResponse)
 async def analyze_brand(request: BrandLlamaRequest):
     """
-    Generate brand description and products using AI
+    Generate brand description and products using OpenAI GPT-4o with web search
     """
-    if not settings.has_groq_config:
+    if not settings.OPENAI_API_KEY:
+        logger.error("❌ OpenAI API key not configured")
         raise HTTPException(
             status_code=500,
-            detail="Groq API key not configured"
+            detail="OpenAI API key not configured. Please check environment variables."
         )
 
-    # Strict system prompt for JSON-only output
+    # Enhanced system prompt optimized for web search and JSON output
     system_prompt = (
-        "You are a helpful assistant. Given a brand name and domain, "
-        "return a JSON object with two keys: "
-        "\"description\" (a concise brand description, max 500 chars) and "
-        "\"product\" (an array of up to 5 product names). "
-        "No extra keys, no preamble, no postamble, just pure JSON. "
-        "Use up-to-date knowledge as of May 2025. "
-        "The description should summarize the company's offerings, services, or core focus clearly and professionally. "
-        "The \"product\" list should highlight the most prominent product lines, services, or categories associated with the brand. "
-        "If uncertain, make an informed generalization, but never fabricate specific product names. "
-        "Output must always be valid JSON."
+        "You are a brand analysis expert with access to real-time web search. "
+        "Your task is to research and analyze brands using the most current information available online. "
+        
+        "IMPORTANT: Return ONLY a valid JSON object with these exact keys:\n"
+        "{\n"
+        "  \"description\": \"A comprehensive brand description (300-500 characters) based on current web information\",\n"
+        "  \"product\": [\"Product 1\", \"Product 2\", \"Product 3\", \"Product 4\", \"Product 5\"]\n"
+        "}\n"
+        
+        "Research Guidelines:\n"
+        "- Use web search to find the most current information about the brand\n"
+        "- Description should cover: what the company does, key offerings, market position, recent developments\n"
+        "- Products should be their main/flagship products, services, or product categories\n"
+        "- Focus on current, active products (not discontinued ones)\n"
+        "- If it's a service company, list service categories as 'products'\n"
+        "- Ensure all information is factual and up-to-date\n"
+        
+        "Output must be valid JSON only - no explanations, no markdown, no additional text."
     )
 
-    user_prompt = f"Brand: {request.brand_name}\nDomain: {request.domain}"
+    user_prompt = (
+        f"Research and analyze this brand using current web information:\n\n"
+        f"Brand Name: {request.brand_name}\n"
+        f"Domain: {request.domain}\n\n"
+        f"Provide a JSON response with current brand description and main products/services."
+    )
 
     payload = {
-        "model": "llama3-8b-8192",
+        "model": "gpt-4o-search-preview",
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        "max_tokens": 512,
-        "temperature": 0.7,
-        "response_format": {"type": "json_object"}
+        "max_tokens": 800,
+        "web_search_options": {}  # Simplified - just enable web search
     }
 
     headers = {
-        "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
         "Content-Type": "application/json"
     }
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            groq_resp = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
+        logger.info(f"🔍 Starting OpenAI web search analysis for brand: {request.brand_name}")
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:  # Increased timeout for web search
+            openai_resp = await client.post(
+                "https://api.openai.com/v1/chat/completions",
                 json=payload,
                 headers=headers
             )
+
+        logger.info(f"📡 OpenAI API response status: {openai_resp.status_code}")
+
+        if openai_resp.status_code != 200:
+            error_text = openai_resp.text
+            logger.error(f"❌ OpenAI API error {openai_resp.status_code}: {error_text}")
+            raise HTTPException(
+                status_code=openai_resp.status_code,
+                detail=f"OpenAI API error: {error_text}"
+            )
+
+        result = openai_resp.json()
+        logger.info(f"📊 OpenAI API response received successfully")
+        
+        # Extract the response content
+        choices = result.get("choices", [])
+        if not choices:
+            logger.error("❌ No choices in OpenAI response")
+            raise HTTPException(status_code=500, detail="Empty response from OpenAI API")
+
+        content = choices[0].get("message", {}).get("content", "")
+        if not content:
+            logger.error("❌ No content in OpenAI response")
+            raise HTTPException(status_code=500, detail="No content in OpenAI response")
+
+        logger.info(f"📝 Raw OpenAI content: {content[:200]}...")
+
+        # Clean and parse JSON response
+        try:
+            # Remove any markdown formatting if present
+            content = content.strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+
+            parsed = json.loads(content)
+            logger.info(f"✅ Successfully parsed JSON response")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ JSON decode error: {e}")
+            logger.error(f"❌ Content that failed to parse: {content}")
             
-            if groq_resp.status_code != 200:
-                raise HTTPException(
-                    status_code=groq_resp.status_code, 
-                    detail=groq_resp.text
-                )
-            
-            result = groq_resp.json()
-            
-            # The model's response is in result['choices'][0]['message']['content']
+            # Attempt to extract JSON from response if it's embedded in text
             try:
-                content = result["choices"][0]["message"]["content"]
-                parsed = json.loads(content)
-                
-                if not isinstance(parsed, dict) or "description" not in parsed or "product" not in parsed:
-                    raise ValueError("Invalid response structure")
-                
-                if not isinstance(parsed["product"], list):
-                    raise ValueError("product must be a list")
-                
-                parsed["product"] = parsed["product"][:5]  # Limit to 5 products
-                
-                logger.info(f"✅ Successfully analyzed brand: {request.brand_name}")
-                
-                return BrandLlamaResponse(
-                    description=parsed["description"],
-                    product=parsed["product"]
-                )
-                
-            except Exception as e:
+                import re
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                if json_match:
+                    parsed = json.loads(json_match.group())
+                    logger.info(f"✅ Successfully extracted and parsed JSON from text")
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to parse JSON response from OpenAI: {str(e)}"
+                    )
+            except Exception as fallback_error:
+                logger.error(f"❌ Fallback JSON extraction failed: {fallback_error}")
                 raise HTTPException(
-                    status_code=500, 
-                    detail=f"Failed to parse Groq response: {e}"
+                    status_code=500,
+                    detail=f"OpenAI returned invalid JSON: {str(e)}"
                 )
-                
+
+        # Validate response structure
+        if not isinstance(parsed, dict):
+            raise HTTPException(status_code=500, detail="Response is not a JSON object")
+
+        if "description" not in parsed:
+            logger.error(f"❌ Missing 'description' key in response: {parsed}")
+            raise HTTPException(status_code=500, detail="Missing 'description' in response")
+
+        if "product" not in parsed:
+            logger.error(f"❌ Missing 'product' key in response: {parsed}")
+            raise HTTPException(status_code=500, detail="Missing 'product' in response")
+
+        if not isinstance(parsed["product"], list):
+            logger.error(f"❌ 'product' is not a list: {parsed['product']}")
+            raise HTTPException(status_code=500, detail="'product' must be an array")
+
+        # Clean and validate the data
+        description = str(parsed["description"]).strip()
+        products = [str(p).strip() for p in parsed["product"] if str(p).strip()]
+        
+        # Limit products to 5 and ensure we have at least some data
+        products = products[:5]
+        
+        if not description:
+            description = f"AI-powered analysis for {request.brand_name}"
+        
+        if not products:
+            products = ["Primary Products/Services"]
+
+        logger.info(f"✅ Successfully analyzed brand: {request.brand_name}")
+        logger.info(f"📋 Description length: {len(description)} chars")
+        logger.info(f"🛍️ Products count: {len(products)}")
+
+        return BrandLlamaResponse(
+            description=description,
+            product=products
+        )
+
     except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="AI API request timed out")
+        logger.error(f"❌ OpenAI API request timed out for brand: {request.brand_name}")
+        raise HTTPException(status_code=504, detail="AI analysis request timed out")
+    
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    
     except Exception as e:
-        logger.error(f"❌ Error analyzing brand: {e}")
-        raise HTTPException(status_code=500, detail=f"AI analysis error: {str(e)}")
+        logger.error(f"❌ Unexpected error analyzing brand {request.brand_name}: {str(e)}")
+        logger.error(f"❌ Exception type: {type(e).__name__}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"AI analysis error: {str(e)}"
+        )
 
 @router.post("/update", response_model=BrandUpdateResponse)
 async def update_brand_with_products(request: BrandUpdateRequest):
@@ -310,3 +403,99 @@ async def update_brand_with_products(request: BrandUpdateRequest):
     except Exception as e:
         logger.error(f"❌ Error updating brand: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") 
+
+@router.get("/config/validate")
+async def validate_openai_config():
+    """
+    Validate OpenAI configuration and test web search functionality
+    """
+    try:
+        # Check basic configuration
+        if not settings.OPENAI_API_KEY:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "valid": False,
+                    "error": "OpenAI API key not configured",
+                    "details": "OPENAI_API_KEY environment variable is missing"
+                }
+            )
+
+        # Test basic API connectivity
+        test_payload = {
+            "model": "gpt-4o-search-preview",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant. Return only the JSON: {\"status\": \"ok\", \"timestamp\": \"current_time\"}"},
+                {"role": "user", "content": "Return the status JSON with current timestamp"}
+            ],
+            "max_tokens": 100,
+            "web_search_options": {}
+        }
+
+        headers = {
+            "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                json=test_payload,
+                headers=headers
+            )
+
+        if response.status_code == 200:
+            result = response.json()
+            return JSONResponse(content={
+                "valid": True,
+                "model": "gpt-4o-search-preview",
+                "web_search_enabled": True,
+                "api_response_time": response.elapsed.total_seconds() if hasattr(response, 'elapsed') else None,
+                "test_result": result.get("choices", [{}])[0].get("message", {}).get("content", "No content")
+            })
+        else:
+            return JSONResponse(
+                status_code=response.status_code,
+                content={
+                    "valid": False,
+                    "error": f"OpenAI API test failed: {response.status_code}",
+                    "details": response.text
+                }
+            )
+
+    except Exception as e:
+        logger.error(f"❌ OpenAI configuration validation failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "valid": False,
+                "error": "Configuration validation failed",
+                "details": str(e)
+            }
+        )
+
+@router.get("/health")
+async def health_check():
+    """
+    Health check endpoint for monitoring
+    """
+    try:
+        return JSONResponse(content={
+            "status": "healthy",
+            "timestamp": "2024-01-01T00:00:00Z",  # You might want to use actual timestamp
+            "services": {
+                "openai": settings.has_openai_config,
+                "supabase": settings.has_supabase_config,
+                "logodev": settings.has_logodev_config
+            },
+            "version": "1.0.0"
+        })
+    except Exception as e:
+        logger.error(f"❌ Health check failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "unhealthy",
+                "error": str(e)
+            }
+        ) 
