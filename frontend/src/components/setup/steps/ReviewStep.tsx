@@ -13,6 +13,7 @@ interface ReviewStepProps {
   topics: Topic[];
   personas: Persona[];
   questions: Question[];
+  setQuestions?: (questions: Question[]) => void;
 }
 
 export const ReviewStep = ({
@@ -21,6 +22,7 @@ export const ReviewStep = ({
   topics,
   personas,
   questions,
+  setQuestions,
 }: ReviewStepProps) => {
   // Get the selected product name (assuming first product is selected)
   const selectedProductName = products.length > 0 ? products[0].name : undefined;
@@ -68,7 +70,18 @@ export const ReviewStep = ({
             title="Questions" 
             isComplete={questions.length > 0}
           >
-            <QuestionsReview questions={questions} personas={personas} />
+            <QuestionsReview 
+              questions={questions} 
+              personas={personas} 
+              onQuestionUpdate={setQuestions ? (questionId: string, newText: string) => {
+                const updatedQuestions = questions.map(question => 
+                  question.id === questionId 
+                    ? { ...question, text: newText }
+                    : question
+                );
+                setQuestions(updatedQuestions);
+              } : undefined}
+            />
           </ReviewAccordionItem>
         </Accordion>
       </div>

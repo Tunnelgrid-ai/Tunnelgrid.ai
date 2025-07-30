@@ -117,6 +117,7 @@ export const BrandSetupWizard = ({
             topics={topics}
             personas={personas}
             questions={questions}
+            setQuestions={setQuestions}
           />
         </TabsContent>
 

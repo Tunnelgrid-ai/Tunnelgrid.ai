@@ -255,6 +255,16 @@ export const QuestionsStep = ({
     setSelectedPersonaId(personaId);
   };
 
+  // Handle question updates
+  const handleQuestionUpdate = (questionId: string, newText: string) => {
+    const updatedQuestions = questions.map(question => 
+      question.id === questionId 
+        ? { ...question, text: newText }
+        : question
+    );
+    setQuestions(updatedQuestions);
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -374,6 +384,7 @@ export const QuestionsStep = ({
             selectedPersonaId={selectedPersonaId}
             personas={personas}
             questionsByPersona={questionsByPersona}
+            onQuestionUpdate={handleQuestionUpdate}
           />
         </div>
       </div>
