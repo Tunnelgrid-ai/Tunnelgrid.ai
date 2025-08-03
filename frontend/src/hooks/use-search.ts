@@ -9,7 +9,7 @@ interface Brand {
 }
 
 interface UseSearchProps {
-  onSelectBrand: (brand: Brand) => void;
+  onSelectBrand: (brand: Brand | null) => void;
 }
 
 export function useSearch({ onSelectBrand }: UseSearchProps) {
@@ -58,7 +58,7 @@ export function useSearch({ onSelectBrand }: UseSearchProps) {
   }, [debouncedSearch]);
 
   const handleSelectBrand = (brand: Brand) => {
-    setSearch("");
+    // Don't clear the search - let the parent component handle setting the search value
     setIsDropdownVisible(false);
     onSelectBrand(brand);
   };

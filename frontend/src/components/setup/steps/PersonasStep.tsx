@@ -11,6 +11,7 @@ import {
   type PersonaGenerateRequest
 } from "@/services/personasService";
 import { RefreshCw, Sparkles, Database, AlertCircle, CheckCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface PersonasStepProps {
   personas: Persona[];
@@ -179,6 +180,18 @@ export const PersonasStep = ({
     return (
       <div className="space-y-6">
         <PersonasHeader />
+        
+        {/* Step Guidance */}
+        <Alert className="border-accent/20 bg-accent/5">
+          <AlertCircle className="h-4 w-4 text-accent" />
+          <AlertDescription className="text-sm">
+            <p>
+              <strong className="text-accent">Review your customer personas.</strong> 
+              These AI-generated personas represent your key target audiences based on your brand and product focus. 
+              They'll be used to create targeted analysis questions in the next step.
+            </p>
+          </AlertDescription>
+        </Alert>
         
         <ReadOnlyPersonaList
           personas={personas}

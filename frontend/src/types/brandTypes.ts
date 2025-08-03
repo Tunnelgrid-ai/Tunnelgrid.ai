@@ -25,6 +25,7 @@ export interface Topic {
   id?: string;
   name: string;
   description?: string;
+  category: 'unbranded' | 'branded' | 'comparative';
   products?: string[]; // Product IDs
   editedByUser?: boolean;      // Whether user has modified this topic
   createdAt?: string;          // ISO timestamp when topic was created

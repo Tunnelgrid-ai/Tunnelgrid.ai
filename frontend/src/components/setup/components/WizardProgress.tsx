@@ -12,15 +12,23 @@ export const WizardProgress = ({ currentStep, isComplete }: WizardProgressProps)
   const progressPercentage = ((currentIndex + 1) / STEPS.length) * 100;
   
   return (
-    <div className="mb-6 space-y-2">
+    <div className="mb-8 space-y-4">
+      {/* Step Counter */}
+      <div className="text-center">
+        <p className="text-sm text-muted-foreground">
+          Step {currentIndex + 1}/{STEPS.length}
+        </p>
+      </div>
+      
+      {/* Progress Bar */}
       <div className="w-full">
         <Progress 
           value={progressPercentage} 
-          className="h-1.5 bg-secondary"
+          className="h-2 bg-secondary"
         />
       </div>
       
-      {/*
+      {/* Step Indicators */}
       <div className="flex justify-between items-center text-xs font-medium gap-1">
         {STEPS.map((step, idx) => {
           const stepComplete = isComplete(step);
@@ -29,24 +37,23 @@ export const WizardProgress = ({ currentStep, isComplete }: WizardProgressProps)
           return (
             <div 
               key={step} 
-              className={`flex items-center gap-1 ${isCurrent ? "text-[#00FFC2]" : 
-                stepComplete ? "text-[#00FFC2]" : "text-text-secondary"}`}
+              className={`flex items-center gap-1 ${isCurrent ? "text-accent" : 
+                stepComplete ? "text-accent" : "text-muted-foreground"}`}
             >
               {stepComplete ? (
-                <CheckCircle className="h-3.5 w-3.5 text-[#00FFC2]" />
+                <CheckCircle className="h-3.5 w-3.5 text-accent" />
               ) : (
                 <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] ${
-                  isCurrent ? "border-[#00FFC2] text-[#00FFC2]" : "border-text-secondary text-text-secondary"
+                  isCurrent ? "border-accent text-accent bg-accent/10" : "border-muted-foreground text-muted-foreground"
                 }`}>
                   {idx + 1}
                 </span>
               )}
-              <span className="hidden sm:inline">{stepLabels[step]}</span>
+              <span className="hidden sm:inline text-xs">{stepLabels[step]}</span>
             </div>
           );
         })}
       </div>
-      */}
     </div>
   );
 };

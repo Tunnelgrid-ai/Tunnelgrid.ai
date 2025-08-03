@@ -1,11 +1,13 @@
 import { BrandEntity, Persona, Product, Question, Topic } from "@/types/brandTypes";
 import { Accordion } from "@/components/ui/accordion";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ReviewAccordionItem } from "./review/ReviewAccordionItem";
 import { BrandInfoReview } from "./review/BrandInfoReview";
 import { ProductsReview } from "./review/ProductsReview";
 import { TopicsReview } from "./review/TopicsReview";
 import { PersonasReview } from "./review/PersonasReview";
 import { QuestionsReview } from "./review/QuestionsReview";
+import { CheckCircle, Rocket } from "lucide-react";
 
 interface ReviewStepProps {
   brandInfo: BrandEntity;
@@ -33,6 +35,18 @@ export const ReviewStep = ({
           Review all the information you've provided before submitting.
         </p>
       </div>
+
+      {/* Step Guidance */}
+      <Alert className="border-accent/20 bg-accent/5">
+        <Rocket className="h-4 w-4 text-accent" />
+        <AlertDescription className="text-sm">
+          <p>
+            <strong className="text-accent">Final review before launching your audit.</strong> 
+            Please verify all information is accurate. Once submitted, your brand analysis will begin 
+            and you'll be able to track your brand's visibility across AI systems.
+          </p>
+        </AlertDescription>
+      </Alert>
 
       <div className="space-y-6">
         <Accordion type="single" collapsible className="w-full">

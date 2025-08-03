@@ -186,60 +186,74 @@ export async function checkBackendHealth(): Promise<HealthResponse | null> {
  * ULTIMATE FALLBACK: Client-side topics
  * 
  * Used only when backend is completely unavailable
+ * Ensures proper category distribution: 4 unbranded, 3 branded, 3 comparative
  */
 function getClientFallbackTopics(): Topic[] {
   console.log('⚠️ Using ultimate client-side fallback topics');
   
   return [
+    // Unbranded Topics (4)
     {
-      id: "client-fallback-1",
-      name: "Product Quality & Performance",
-      description: "How consumers perceive the overall quality, reliability, and performance of the product"
+      id: "client-fallback-unbranded-1",
+      name: "Best Industry Solutions",
+      description: "General recommendations where brands might be mentioned naturally",
+      category: "unbranded"
     },
     {
-      id: "client-fallback-2", 
-      name: "Value for Money",
-      description: "Consumer opinions on pricing, value proposition, and cost-effectiveness compared to alternatives"
+      id: "client-fallback-unbranded-2", 
+      name: "Top Platform Reviews",
+      description: "User experiences with leading platforms in the space",
+      category: "unbranded"
     },
     {
-      id: "client-fallback-3",
-      name: "Brand Trust & Reputation", 
-      description: "How the brand is perceived in terms of credibility, trustworthiness, and overall reputation"
+      id: "client-fallback-unbranded-3",
+      name: "Popular Service Comparisons", 
+      description: "Consumer discussions comparing different service options",
+      category: "unbranded"
     },
     {
-      id: "client-fallback-4",
-      name: "Customer Service Experience",
-      description: "Consumer experiences with support, service quality, and problem resolution"
+      id: "client-fallback-unbranded-4",
+      name: "Market Leader Analysis",
+      description: "Analysis of top performers in the industry",
+      category: "unbranded"
+    },
+    // Branded Topics (3)
+    {
+      id: "client-fallback-branded-1",
+      name: "Brand User Experience",
+      description: "Direct feedback and opinions about the brand",
+      category: "branded"
     },
     {
-      id: "client-fallback-5",
-      name: "User Experience & Usability",
-      description: "How easy, intuitive, and satisfying the product is to use from a consumer perspective"
+      id: "client-fallback-branded-2",
+      name: "Brand Service Quality",
+      description: "Assessment of brand's service quality and reliability",
+      category: "branded"
     },
     {
-      id: "client-fallback-6",
-      name: "Innovation & Features",
-      description: "Consumer perception of the product's innovative aspects, features, and technological advancement"
+      id: "client-fallback-branded-3",
+      name: "Brand Value Proposition",
+      description: "Discussion of brand's unique benefits and value",
+      category: "branded"
+    },
+    // Comparative Topics (3)
+    {
+      id: "client-fallback-comparative-1",
+      name: "Brand vs Competitors",
+      description: "Direct comparisons between brand and market alternatives",
+      category: "comparative"
     },
     {
-      id: "client-fallback-7",
-      name: "Social Responsibility",
-      description: "How consumers view the brand's environmental impact, ethics, and social responsibility"
+      id: "client-fallback-comparative-2",
+      name: "Feature Comparison",
+      description: "Comparing specific features and capabilities with rivals",
+      category: "comparative"
     },
     {
-      id: "client-fallback-8",
-      name: "Availability & Accessibility", 
-      description: "Consumer experiences with product availability, distribution, and ease of purchase"
-    },
-    {
-      id: "client-fallback-9",
-      name: "Comparison with Competitors",
-      description: "How consumers compare this product/brand to competitors and alternatives in the market"
-    },
-    {
-      id: "client-fallback-10",
-      name: "Long-term Satisfaction",
-      description: "Consumer opinions on durability, long-term value, and continued satisfaction over time"
+      id: "client-fallback-comparative-3",
+      name: "Market Position Analysis",
+      description: "How brand ranks against industry competitors",
+      category: "comparative"
     }
   ];
 } 

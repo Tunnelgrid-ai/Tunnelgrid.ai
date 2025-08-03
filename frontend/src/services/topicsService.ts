@@ -13,18 +13,6 @@
  * - topic_name: VARCHAR (topic name)
  * - topic_type: VARCHAR (topic description, nullable)
  * - visibility: INTEGER (visibility level, nullable)
- * 
- * USER FLOW INTEGRATION:
- * 1. User reaches Topics Step → topics auto-generated via AI
- * 2. AI topics stored in database
- * 3. User can edit topics → updated topics saved
- * 4. All topics linked to specific audit for data integrity
- * 
- * DEVELOPMENT SUPPORT:
- * - Comprehensive error handling and logging
- * - Input validation and sanitization
- * - Optimistic UI support (immediate feedback)
- * - Batch operations for efficiency
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -42,6 +30,7 @@ export interface DatabaseTopic {
   audit_id: string;              // Links to specific audit
   topic_name: string;            // Topic title
   topic_type: string | null;     // Topic description (nullable)
+  topic_category: 'unbranded' | 'branded' | 'comparative'; // Topic category
   visibility: number | null;     // Visibility level (nullable)
 }
 
@@ -109,6 +98,7 @@ function databaseTopicToAppTopic(dbTopic: DatabaseTopic): TopicWithMetadata {
     id: dbTopic.topic_id,
     name: dbTopic.topic_name,
     description: dbTopic.topic_type || '', // Handle null values
+    category: dbTopic.topic_category, // Add category field
     editedByUser: false, // We'll track this in app state
     createdAt: undefined, // Database doesn't have timestamp fields
     updatedAt: undefined  // Database doesn't have timestamp fields
@@ -133,7 +123,8 @@ function appTopicToDatabaseTopic(
     topic_id: topic.id || uuidv4(),
     audit_id: auditId,
     topic_name: topic.name.trim(),
-    topic_type: topic.description.trim(),
+    topic_type: topic.description?.trim() || '',
+    topic_category: topic.category, // Add category field
     visibility: 1 // Default visibility
   };
 }

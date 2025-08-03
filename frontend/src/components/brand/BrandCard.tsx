@@ -30,7 +30,7 @@ export const BrandCard = ({ brand, onAnalyze, onBack }: BrandCardProps) => {
       <p className="text-sm text-muted-foreground mb-8">{brand.domain}</p>
       
       <Button onClick={onAnalyze} className="w-full max-w-md text-lg py-6 bg-accent hover:bg-accent/90 text-accent-foreground">
-        Run Audit
+        Setup Audit
         <ArrowRight className="ml-2 h-5 w-5" />
       </Button>
       

@@ -412,6 +412,7 @@ export type Database = {
           topic_id: string
           topic_name: string
           topic_type: string | null
+          topic_category: 'unbranded' | 'branded' | 'comparative'
           visibility: number | null
         }
         Insert: {
@@ -419,6 +420,7 @@ export type Database = {
           topic_id?: string
           topic_name: string
           topic_type?: string | null
+          topic_category: 'unbranded' | 'branded' | 'comparative'
           visibility?: number | null
         }
         Update: {
@@ -426,6 +428,7 @@ export type Database = {
           topic_id?: string
           topic_name?: string
           topic_type?: string | null
+          topic_category?: 'unbranded' | 'branded' | 'comparative'
           visibility?: number | null
         }
         Relationships: [

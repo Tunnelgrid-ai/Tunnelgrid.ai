@@ -13,10 +13,12 @@ interface Brand {
 
 interface SearchBarProps {
   selectedBrand: Brand | null;
-  onSelectBrand: (brand: Brand) => void;
+  onSelectBrand: (brand: Brand | null) => void;
+  onGoClick: () => void;
+  isProcessing: boolean;
 }
 
-export const SearchBar = ({ selectedBrand, onSelectBrand }: SearchBarProps) => {
+export const SearchBar = ({ selectedBrand, onSelectBrand, onGoClick, isProcessing }: SearchBarProps) => {
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const resultsListRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -39,6 +41,10 @@ export const SearchBar = ({ selectedBrand, onSelectBrand }: SearchBarProps) => {
   } = useSearch({
     onSelectBrand: (brand) => {
       onSelectBrand(brand);
+      // Set the search input to the selected brand name (only if brand is not null)
+      if (brand) {
+        setSearch(brand.name);
+      }
     },
   });
 
@@ -74,13 +80,19 @@ export const SearchBar = ({ selectedBrand, onSelectBrand }: SearchBarProps) => {
   }, [activeIndex, scrollActiveItemIntoView]);
   
   const handleSearchSubmit = () => {
-    if (filteredBrands.length > 0) {
+    if (selectedBrand) {
+      onGoClick();
+    } else if (filteredBrands.length > 0) {
       handleSelectBrand(filteredBrands[0]);
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
+    // Clear selected brand if user starts typing again (different from selected brand name)
+    if (selectedBrand && e.target.value !== selectedBrand.name) {
+      onSelectBrand(null);
+    }
   };
 
   return (
@@ -104,6 +116,8 @@ export const SearchBar = ({ selectedBrand, onSelectBrand }: SearchBarProps) => {
               onFocus={() => setIsDropdownVisible(true)}
               onSubmit={handleSearchSubmit}
               activeDescendant={activeIndex >= 0 ? `brand-item-${filteredBrands[activeIndex].id}` : undefined}
+              isProcessing={isProcessing}
+              hasSelection={!!selectedBrand}
             />
             
             <SearchDropdown 
@@ -111,7 +125,7 @@ export const SearchBar = ({ selectedBrand, onSelectBrand }: SearchBarProps) => {
               filteredBrands={filteredBrands}
               activeIndex={activeIndex}
               selectedBrand={selectedBrand}
-              isVisible={isDropdownVisible}
+              isVisible={isDropdownVisible && !selectedBrand} // Hide dropdown when brand is selected
               noResultsFound={noResultsFound}
               loading={loading}
               error={error}
