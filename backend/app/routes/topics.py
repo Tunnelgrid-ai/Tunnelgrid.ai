@@ -78,68 +78,18 @@ class Topic(BaseModel):
     id: str
     name: str
     description: str
+    category: str = Field(..., pattern="^(unbranded|branded|comparative)$")
 
-class TopicsResponse(BaseModel):
-    success: bool
+class TopicsGenerateResponse(BaseModel):
     topics: List[Topic]
-    source: str
-    processingTime: int
-    tokenUsage: Optional[int] = None
-    reason: Optional[str] = None
+    source: str = Field(..., description="Source of topics: 'ai' or 'fallback'")
+    message: str = Field(..., description="Success message")
+    processing_time_ms: Optional[int] = Field(None, description="Processing time in milliseconds")
 
-# FALLBACK TOPICS: Server-side fallback when AI fails
-FALLBACK_TOPICS = [
-    {
-        "id": "fallback-1",
-        "name": "Product Quality & Performance",
-        "description": "How consumers perceive the overall quality, reliability, and performance of the product"
-    },
-    {
-        "id": "fallback-2", 
-        "name": "Value for Money",
-        "description": "Consumer opinions on pricing, value proposition, and cost-effectiveness compared to alternatives"
-    },
-    {
-        "id": "fallback-3",
-        "name": "Brand Trust & Reputation", 
-        "description": "How the brand is perceived in terms of credibility, trustworthiness, and overall reputation"
-    },
-    {
-        "id": "fallback-4",
-        "name": "Customer Service Experience",
-        "description": "Consumer experiences with support, service quality, and problem resolution"
-    },
-    {
-        "id": "fallback-5",
-        "name": "User Experience & Usability",
-        "description": "How easy, intuitive, and satisfying the product is to use from a consumer perspective"
-    },
-    {
-        "id": "fallback-6",
-        "name": "Innovation & Features",
-        "description": "Consumer perception of the product's innovative aspects, features, and technological advancement"
-    },
-    {
-        "id": "fallback-7",
-        "name": "Social Responsibility",
-        "description": "How consumers view the brand's environmental impact, ethics, and social responsibility"
-    },
-    {
-        "id": "fallback-8",
-        "name": "Availability & Accessibility", 
-        "description": "Consumer experiences with product availability, distribution, and ease of purchase"
-    },
-    {
-        "id": "fallback-9",
-        "name": "Comparison with Competitors",
-        "description": "How consumers compare this product/brand to competitors and alternatives in the market"
-    },
-    {
-        "id": "fallback-10",
-        "name": "Long-term Satisfaction",
-        "description": "Consumer opinions on durability, long-term value, and continued satisfaction over time"
-    }
-]
+class HealthCheckResponse(BaseModel):
+    status: str
+    services: Dict[str, str]
+    message: str
 
 # HELPER FUNCTIONS
 def get_groq_api_key() -> Optional[str]:
@@ -150,12 +100,102 @@ def get_groq_api_key() -> Optional[str]:
     print(f"🔑 API Key length: {len(api_key) if api_key else 0}")
     return api_key
 
+# FALLBACK TOPICS: Used when AI generation fails
+def get_fallback_topics(brand_name: str, product_name: str) -> List[Dict[str, Any]]:
+    """
+    Provide fallback topics when AI generation fails
+    Ensures proper category distribution: 4 unbranded, 3 branded, 3 comparative
+    """
+    return [
+        # Unbranded Topics (4)
+        {
+            "id": str(uuid.uuid4()),
+            "name": f"Best {product_name.split()[-1]} Options",
+            "description": f"General recommendations where {brand_name} might be mentioned naturally",
+            "category": "unbranded"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": f"Top Industry Solutions",
+            "description": f"Consumer preferences in the {product_name} space",
+            "category": "unbranded"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": f"Popular Platform Reviews",
+            "description": f"User experiences with leading platforms",
+            "category": "unbranded"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": f"Market Leaders Analysis",
+            "description": f"Discussion of top performers in the market",
+            "category": "unbranded"
+        },
+        # Branded Topics (3)
+        {
+            "id": str(uuid.uuid4()),
+            "name": f"{brand_name} User Experience",
+            "description": f"Direct feedback and opinions about {brand_name}",
+            "category": "branded"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": f"{brand_name} Service Quality",
+            "description": f"Assessment of {brand_name}'s service quality and reliability",
+            "category": "branded"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": f"{brand_name} Value Proposition",
+            "description": f"Discussion of {brand_name}'s unique benefits and value",
+            "category": "branded"
+        },
+        # Comparative Topics (3)
+        {
+            "id": str(uuid.uuid4()),
+            "name": f"{brand_name} vs Competitors",
+            "description": f"Direct comparisons between {brand_name} and market alternatives",
+            "category": "comparative"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": f"{brand_name} Feature Comparison",
+            "description": f"Comparing specific features and capabilities with rivals",
+            "category": "comparative"
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": f"{brand_name} Market Position",
+            "description": f"How {brand_name} ranks against industry competitors",
+            "category": "comparative"
+        }
+    ]
+
 def create_topics_prompt(brand_name: str, brand_domain: str, product_name: str, 
                         industry: Optional[str] = None, additional_context: Optional[str] = None) -> str:
     """
-    Create AI prompt for topics generation
+    Create AI prompt for categorized topics generation
+    Ensures proper distribution: 4 unbranded, 3 branded, 3 comparative topics
     """
     prompt = f"""Generate exactly 10 consumer perception research topics for analyzing "{product_name}" by {brand_name} ({brand_domain}).
+
+IMPORTANT: Topics must be distributed across these 3 categories with exact counts:
+
+1. UNBRANDED TOPICS (exactly 4 topics):
+   - Questions where consumers might mention {brand_name} naturally without direct prompting
+   - Example: "Best dating apps for college students" (where {brand_name} might be mentioned)
+   - Focus: General industry discussions where your brand could appear organically
+
+2. BRANDED TOPICS (exactly 3 topics):
+   - Direct questions specifically about {brand_name}
+   - Example: "Is {brand_name} good for serious relationships?"
+   - Focus: Direct brand-specific inquiries and discussions
+
+3. COMPARATIVE TOPICS (exactly 3 topics):
+   - Questions comparing {brand_name} to specific competitors
+   - Example: "Competitor vs {brand_name} for college students"
+   - Focus: Head-to-head comparisons with named competitors
 
 Context:
 - Brand: {brand_name}
@@ -167,29 +207,36 @@ Context:
     if additional_context:
         prompt += f"\n- Additional Context: {additional_context}"
     
-    prompt += """
+    prompt += f"""
 
 Requirements:
-1. Generate exactly 10 distinct topics
-2. Each topic should focus on consumer perception, opinion, or experience
-3. Topics should be specific to this brand/product combination
-4. Cover diverse aspects: quality, pricing, experience, trust, innovation, etc.
-5. Each topic needs a clear, descriptive name (2-6 words)
-6. Each topic needs a brief description explaining what it covers
+1. Generate exactly 10 topics total (4 unbranded + 3 branded + 3 comparative)
+2. Each topic needs: name (2-6 words), description, category
+3. Categories must be exactly: "unbranded", "branded", "comparative"
+4. Topics should be specific to {product_name} by {brand_name}
+5. Use realistic competitor names in comparative topics
+6. Make topics natural and conversational
 
-Respond with a JSON array containing exactly 10 objects, each with:
-- "name": string (topic name, 2-6 words)
-- "description": string (brief explanation of what this topic covers)
-
-Example format:
+Respond with a JSON array containing exactly 10 objects:
 [
-  {
-    "name": "Product Quality Assessment",
-    "description": "Consumer opinions on build quality, durability, and performance of the product"
-  }
+  {{
+    "name": "Best Dating Apps 2024",
+    "description": "General recommendations where users naturally mention top brands",
+    "category": "unbranded"
+  }},
+  {{
+    "name": "{brand_name} Success Stories",
+    "description": "Direct discussion about {brand_name}'s effectiveness",
+    "category": "branded"
+  }},
+  {{
+    "name": "{brand_name} vs Bumble Features",
+    "description": "Comparing features between {brand_name} and specific competitors",
+    "category": "comparative"
+  }}
 ]
 
-Generate topics specifically relevant to """ + f"{product_name} by {brand_name}:"
+Generate topics specifically relevant to {product_name} by {brand_name}:"""
     
     return prompt
 
@@ -284,13 +331,20 @@ def parse_topics_from_response(response_text: str) -> Optional[List[Dict[str, st
                 logger.warning(f"Topic {i} is not a dictionary: {type(topic)}")
                 continue
             
-            if "name" not in topic or "description" not in topic:
+            if "name" not in topic or "description" not in topic or "category" not in topic:
                 logger.warning(f"Topic {i} missing required fields. Available keys: {list(topic.keys())}")
                 continue
             
+            # Validate category
+            category = str(topic["category"]).strip().lower()
+            if category not in ["unbranded", "branded", "comparative"]:
+                logger.warning(f"Topic {i} has invalid category '{category}', defaulting to 'unbranded'")
+                category = "unbranded"
+            
             validated_topics.append({
                 "name": str(topic["name"]).strip(),
-                "description": str(topic["description"]).strip()
+                "description": str(topic["description"]).strip(),
+                "category": category
             })
         
         logger.info(f"✅ Successfully parsed {len(validated_topics)} topics")
@@ -306,7 +360,7 @@ def parse_topics_from_response(response_text: str) -> Optional[List[Dict[str, st
 
 # API ENDPOINTS
 
-@router.post("/generate", response_model=TopicsResponse)
+@router.post("/generate", response_model=TopicsGenerateResponse)
 # @limiter.limit(f"{settings.RATE_LIMIT_REQUESTS}/{settings.RATE_LIMIT_PERIOD}")
 async def generate_topics(request: Request, body: TopicsGenerateRequest):
     """
@@ -318,17 +372,17 @@ async def generate_topics(request: Request, body: TopicsGenerateRequest):
     api_key = get_groq_api_key()
     if not api_key:
         logger.warning("🔑 No GroqCloud API key available, returning fallback topics")
+        fallback_topics_data = get_fallback_topics(body.brandName, body.productName)
         fallback_topics = [
-            Topic(id=str(uuid.uuid4()), name=topic["name"], description=topic["description"])
-            for i, topic in enumerate(FALLBACK_TOPICS)
+            Topic(id=topic_data["id"], name=topic_data["name"], description=topic_data["description"], category=topic_data["category"])
+            for topic_data in fallback_topics_data
         ]
         processing_time = int((time.time() - start_time) * 1000)
-        return TopicsResponse(
-            success=True,
+        return TopicsGenerateResponse(
             topics=fallback_topics,
             source="fallback",
-            processingTime=processing_time,
-            reason="API key not configured"
+            message="Fallback topics provided due to missing API key",
+            processing_time_ms=processing_time
         )
 
     try:
@@ -400,84 +454,115 @@ async def generate_topics(request: Request, body: TopicsGenerateRequest):
             
             if not parsed_topics:
                 logger.warning("Failed to parse AI response, returning fallback topics")
+                fallback_topics_data = get_fallback_topics(body.brandName, body.productName)
                 fallback_topics = [
-                    Topic(id=str(uuid.uuid4()), name=topic["name"], description=topic["description"])
-                    for i, topic in enumerate(FALLBACK_TOPICS)
+                    Topic(id=topic_data["id"], name=topic_data["name"], description=topic_data["description"], category=topic_data["category"])
+                    for topic_data in fallback_topics_data
                 ]
                 processing_time = int((time.time() - start_time) * 1000)
-                return TopicsResponse(
-                    success=True,
+                return TopicsGenerateResponse(
                     topics=fallback_topics,
                     source="fallback",
-                    processingTime=processing_time,
-                    reason="AI response parsing failed"
+                    message="AI response parsing failed, returning fallback topics",
+                    processing_time_ms=processing_time
                 )
 
-            # Convert to Topic objects with proper UUIDs
-            topics = [
-                Topic(id=str(uuid.uuid4()), name=topic["name"], description=topic["description"])
-                for topic in parsed_topics[:10]  # Ensure max 10 topics
-            ]
+            # Convert to Topic objects with proper UUIDs and validate categories
+            topics = []
+            for topic in parsed_topics[:10]:  # Ensure max 10 topics
+                # Validate required fields
+                if not all(key in topic for key in ["name", "description", "category"]):
+                    logger.warning(f"Skipping invalid topic: {topic}")
+                    continue
+                
+                # Validate category
+                if topic["category"] not in ["unbranded", "branded", "comparative"]:
+                    logger.warning(f"Invalid category '{topic['category']}', defaulting to 'unbranded'")
+                    topic["category"] = "unbranded"
+                
+                topics.append(Topic(
+                    id=str(uuid.uuid4()), 
+                    name=topic["name"], 
+                    description=topic["description"],
+                    category=topic["category"]
+                ))
+            
+            # Validate category distribution
+            category_counts = {}
+            for topic in topics:
+                category_counts[topic.category] = category_counts.get(topic.category, 0) + 1
+            
+            expected_distribution = {"unbranded": 4, "branded": 3, "comparative": 3}
+            if category_counts != expected_distribution:
+                logger.warning(f"Category distribution doesn't match expected: {category_counts} vs {expected_distribution}")
+                # Use fallback topics if distribution is wrong
+                fallback_topics_data = get_fallback_topics(body.brandName, body.productName)
+                topics = [
+                    Topic(id=topic_data["id"], name=topic_data["name"], description=topic_data["description"], category=topic_data["category"])
+                    for topic_data in fallback_topics_data
+                ]
 
             processing_time = int((time.time() - start_time) * 1000)
             
             logger.info(f"✅ Successfully generated {len(topics)} topics in {processing_time}ms")
             
-            return TopicsResponse(
-                success=True,
+            return TopicsGenerateResponse(
                 topics=topics,
                 source="ai",
-                processingTime=processing_time,
-                tokenUsage=token_usage
+                message="Topics generated successfully",
+                processing_time_ms=processing_time
             )
 
     except httpx.TimeoutException:
         logger.error("GroqCloud API request timed out")
+        fallback_topics_data = get_fallback_topics(body.brandName, body.productName)
         fallback_topics = [
-            Topic(id=str(uuid.uuid4()), name=topic["name"], description=topic["description"])
-            for i, topic in enumerate(FALLBACK_TOPICS)
+            Topic(id=topic_data["id"], name=topic_data["name"], description=topic_data["description"], category=topic_data["category"])
+            for topic_data in fallback_topics_data
         ]
         processing_time = int((time.time() - start_time) * 1000)
-        return TopicsResponse(
-            success=True,
+        return TopicsGenerateResponse(
             topics=fallback_topics,
             source="fallback",
-            processingTime=processing_time,
-            reason="API timeout"
+            message="API timeout, returning fallback topics",
+            processing_time_ms=processing_time
         )
     
     except Exception as e:
         print(f"💥 TOPICS - Unexpected error: {e}")
         print(f"💥 Error type: {type(e)}")
         logger.error(f"Unexpected error in topic generation: {e}")
+        fallback_topics_data = get_fallback_topics(body.brandName, body.productName)
         fallback_topics = [
-            Topic(id=str(uuid.uuid4()), name=topic["name"], description=topic["description"])
-            for i, topic in enumerate(FALLBACK_TOPICS)
+            Topic(id=topic_data["id"], name=topic_data["name"], description=topic_data["description"], category=topic_data["category"])
+            for topic_data in fallback_topics_data
         ]
         processing_time = int((time.time() - start_time) * 1000)
-        return TopicsResponse(
-            success=True,
+        return TopicsGenerateResponse(
             topics=fallback_topics,
             source="fallback",
-            processingTime=processing_time,
-            reason=f"Error: {str(e)}"
+            message=f"Error: {str(e)}, returning fallback topics",
+            processing_time_ms=processing_time
         )
 
-@router.get("/fallback", response_model=TopicsResponse)
-async def get_fallback_topics():
+@router.get("/fallback", response_model=TopicsGenerateResponse)
+async def get_fallback_topics_endpoint(request: Request):
     """
     Get fallback topics directly (for testing or when AI is unavailable)
     """
-    topics = [
-        Topic(id=str(uuid.uuid4()), name=topic["name"], description=topic["description"])
-        for i, topic in enumerate(FALLBACK_TOPICS)
+    # This endpoint is primarily for testing and should not use the AI model
+    # It will return a fixed set of fallback topics
+    fallback_topics_data = get_fallback_topics("BrandName", "ProductName") # Placeholder for testing
+    fallback_topics = [
+        Topic(id=topic_data["id"], name=topic_data["name"], description=topic_data["description"], category=topic_data["category"])
+        for topic_data in fallback_topics_data
     ]
     
-    return TopicsResponse(
-        success=True,
-        topics=topics,
+    return TopicsGenerateResponse(
+        topics=fallback_topics,
         source="fallback",
-        processingTime=0
+        message="Fallback topics provided for testing",
+        processing_time_ms=0
     )
 
 @router.get("/health", response_model=HealthResponse)

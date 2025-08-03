@@ -1,6 +1,6 @@
 
 import React, { forwardRef } from "react";
-import { Search, ArrowRight } from "lucide-react";
+import { Search, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SearchInputProps {
@@ -10,10 +10,12 @@ interface SearchInputProps {
   onFocus: () => void;
   onSubmit: () => void;
   activeDescendant?: string;
+  isProcessing: boolean;
+  hasSelection: boolean;
 }
 
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
-  ({ value, onChange, onKeyDown, onFocus, onSubmit, activeDescendant }, ref) => {
+  ({ value, onChange, onKeyDown, onFocus, onSubmit, activeDescendant, isProcessing, hasSelection }, ref) => {
     return (
       <div className="rounded-lg overflow-hidden border-2 bg-background border-border/30 shadow-md">
         <div className="relative h-[52px]">
@@ -31,15 +33,26 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
               role="combobox"
               aria-controls="search-results-list"
               aria-activedescendant={activeDescendant}
+              disabled={isProcessing}
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
               <Button 
                 size="sm" 
-                className="bg-[#3BFFD3] hover:bg-[#3BFFD3]/90 text-black font-medium rounded-full px-4" 
+                className="bg-[#3BFFD3] hover:bg-[#3BFFD3]/90 text-black font-medium rounded-full px-4 disabled:opacity-50" 
                 onClick={onSubmit}
+                disabled={isProcessing || !hasSelection}
               >
-                <span className="mr-1">Go</span>
-                <ArrowRight className="h-4 w-4" />
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="mr-1">Go</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
               </Button>
             </div>
           </div>

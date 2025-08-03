@@ -11,6 +11,7 @@ import {
   type QuestionGenerateRequest 
 } from "@/services/questionService";
 import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface QuestionsStepProps {
   questions: Question[];
@@ -318,6 +319,18 @@ export const QuestionsStep = ({
   return (
     <div className="space-y-6">
       <QuestionsHeader />
+
+      {/* Step Guidance */}
+      <Alert className="border-accent/20 bg-accent/5">
+        <AlertTriangle className="h-4 w-4 text-accent" />
+        <AlertDescription className="text-sm">
+          <p>
+            <strong className="text-accent">Customize your analysis questions.</strong> 
+            These AI-generated questions will be used to analyze how your brand appears in AI conversations. 
+            Each question is tailored to specific personas and can be edited to better match your analysis goals.
+          </p>
+        </AlertDescription>
+      </Alert>
 
       {/* 🆕 RETRY STATUS INDICATOR */}
       {(isRetrying || retryStatus) && (

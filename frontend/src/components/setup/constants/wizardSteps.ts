@@ -10,9 +10,9 @@ export const STEPS = [
 export type SetupStep = typeof STEPS[number];
 
 export const stepLabels = {
-  "brand-info": "Brand & Product",
-  "topics": "Topics",
-  "personas": "Personas",
-  "questions": "Questions",
-  "review": "Review"
+  "brand-info": "Verify Brand & Product",
+  "topics": "Select Topics",
+  "personas": "Review Personas", 
+  "questions": "Customize Questions",
+  "review": "Review & Launch"
 };

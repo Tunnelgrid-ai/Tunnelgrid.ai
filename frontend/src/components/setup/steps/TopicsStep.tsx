@@ -1,30 +1,30 @@
 /**
- * TOPICS STEP - AI-POWERED TOPICS GENERATION WITH DATABASE PERSISTENCE
+ * TOPICS STEP - AI-POWERED CATEGORIZED TOPICS GENERATION WITH DATABASE PERSISTENCE
  * 
- * PURPOSE: Generate AI-powered topics for brand analysis using GroqCloud
+ * PURPOSE: Generate categorized AI-powered topics for brand analysis
  * FEATURES:
- * - Automatic topics generation on component load
+ * - Categorized topics: 4 unbranded, 3 branded, 3 comparative
  * - Database persistence for topics (load existing or store new)
  * - Edit topics in-place with optimistic updates
- * - Integration with BrandSetupWizard state management
+ * - Visual explanation of topic categories and structure
  * 
  * WORKFLOW:
  * 1. Component loads → Check for existing topics in database
- * 2. If found → Load existing topics
- * 3. If not found → Generate new topics via AI and store in database
+ * 2. If found → Load existing topics and categorize them
+ * 3. If not found → Generate new categorized topics via AI and store in database
  * 4. User can edit topics inline with real-time database updates
  * 5. Topics are passed to wizard state for use in next steps
  */
 
 import { useState, useEffect } from "react";
 import { Topic, Product } from "@/types/brandTypes";
-import { TopicsHeader } from "./topics/TopicsHeader";
-import { TopicsGrid } from "./topics/TopicsGrid";
+import { TopicsExplanationSection } from "./topics/TopicsExplanationSection";
+import { TopicsCategorySection } from "./topics/TopicsCategorySection";
 import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// NEW IMPORTS: Services for AI generation and database storage
+// Services for AI generation and database storage
 import { generateTopics } from "@/services/groqService";
 import { 
   storeTopics,
@@ -34,17 +34,10 @@ import {
   UpdateTopicRequest
 } from "@/services/topicsService";
 
-/**
- * INTERFACE: Enhanced TopicsStep Props
- * 
- * NEW ADDITION: auditContext for database operations
- * Contains all audit-related information from wizard state
- */
 interface TopicsStepProps {
   topics: Topic[];
   setTopics: (topics: Topic[]) => void;
   products: Product[];
-  // NEW: Audit context for database operations
   auditContext?: {
     auditId: string | null;
     brandId: string | null;
@@ -55,16 +48,6 @@ interface TopicsStepProps {
   };
 }
 
-/**
- * COMPONENT: Enhanced TopicsStep
- * 
- * FEATURES:
- * - Automatic topics generation on first load
- * - Database persistence with audit linkage
- * - Real-time editing with auto-save
- * - Loading states and error handling
- * - Source indicators (AI vs user-edited)
- */
 export const TopicsStep: React.FC<TopicsStepProps> = ({ 
   topics, 
   setTopics, 
@@ -91,48 +74,17 @@ export const TopicsStep: React.FC<TopicsStepProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [generationSource, setGenerationSource] = useState<'ai' | 'fallback' | null>(null);
   const [hasExistingTopics, setHasExistingTopics] = useState(false);
-  
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [newTopic, setNewTopic] = useState({ name: '', reason: '' });
-  const [showAddForm, setShowAddForm] = useState(false);
 
-  // 🔍 DEBUG: Log key information on every render
-  console.log('🔍 TopicsStep Debug:', {
-    topicsCount: topics.length,
-    hasAuditContext: !!auditContext,
-    auditId: auditContext?.auditId,
-    brandName: auditContext?.brandName,
-    selectedProduct: auditContext?.selectedProduct,
-    topics: topics
-  });
-
-  /**
-   * EFFECT: Initialize Topics on Component Load
-   * 
-   * WORKFLOW:
-   * 1. Check if audit context is available
-   * 2. Check if topics already exist in database
-   * 3. If exist → load from database
-   * 4. If not exist → generate new topics via AI
-   * 5. Store generated topics in database
-   * 6. Update wizard state with topics
-   */
+  // Initialize topics on component load
   useEffect(() => {
     const initializeTopics = async () => {
-      console.log('🔍 useEffect initializeTopics called with auditContext:', auditContext);
-      console.log('🔍 Current topics state:', topics);
-      
-      // STEP 1: Validate audit context
       if (!auditContext?.auditId) {
-        console.warn('⚠️ No audit ID available for topics generation');
-        console.log('🔍 auditContext details:', auditContext);
-        setError('Audit information missing. Please complete the previous step.');
+        console.warn('⚠️ No auditId provided, skipping topics initialization');
         return;
       }
-      if (!auditContext.brandName || !auditContext.selectedProduct) {
-        console.warn('⚠️ Missing brand or product information');
-        console.log('🔍 brandName:', auditContext.brandName, 'selectedProduct:', auditContext.selectedProduct);
-        setError('Brand and product information required for topics generation.');
+
+      if (topics.length > 0) {
+        console.log('✅ Topics already exist in state, skipping initialization');
         return;
       }
 
@@ -177,19 +129,13 @@ export const TopicsStep: React.FC<TopicsStepProps> = ({
     };
 
     initializeTopics();
-  }, [auditContext?.auditId]); // Re-run if audit ID changes
+  }, [auditContext?.auditId]);
 
   /**
-   * FUNCTION: Generate and Store New Topics
+   * FUNCTION: Generate and Store New Categorized Topics
    * 
    * PURPOSE: AI-powered topics generation with database storage
-   * 
-   * WORKFLOW:
-   * 1. Prepare generation request with brand/product context
-   * 2. Call GroqCloud API for AI topic generation
-   * 3. Store generated topics in Supabase database
-   * 4. Update wizard state with new topics
-   * 5. Show success/error feedback to user
+   * ENSURES: Proper category distribution (4 unbranded, 3 branded, 3 comparative)
    */
   const generateAndStoreTopics = async () => {
     if (!auditContext?.auditId || !auditContext.brandName || !auditContext.selectedProduct) {
@@ -199,7 +145,7 @@ export const TopicsStep: React.FC<TopicsStepProps> = ({
     setIsGenerating(true);
     
     try {
-      console.log('🤖 Generating topics with AI for:', {
+      console.log('🤖 Generating categorized topics with AI for:', {
         brandName: auditContext.brandName,
         brandDomain: auditContext.brandDomain,
         productName: auditContext.selectedProduct
@@ -212,16 +158,16 @@ export const TopicsStep: React.FC<TopicsStepProps> = ({
         auditContext.selectedProduct
       );
       
-      setGenerationSource('ai'); // groqService returns topics directly now
-      console.log(`✅ Generated ${generatedTopics.length} topics via AI`);
+      setGenerationSource('ai');
+      console.log(`✅ Generated ${generatedTopics.length} categorized topics via AI`);
       
       // STEP 3: Store topics in database
-      console.log('💾 Storing topics in database...');
+      console.log('💾 Storing categorized topics in database...');
       
       const storeResult = await storeTopics({
         auditId: auditContext.auditId,
         topics: generatedTopics,
-        source: 'ai', // Topics came from AI
+        source: 'ai',
         replaceExisting: false
       });
       
@@ -232,152 +178,155 @@ export const TopicsStep: React.FC<TopicsStepProps> = ({
       // STEP 4: Update wizard state with stored topics
       setTopics(storeResult.data);
       
-      console.log(`⏱️ Generation completed successfully`);
+      console.log(`⏱️ Categorized topics generation completed successfully`);
 
     } catch (error) {
-      console.error('💥 Error generating/storing topics:', error);
-      throw error; // Re-throw to be handled by calling function
+      console.error('💥 Error generating/storing categorized topics:', error);
+      throw error;
     } finally {
       setIsGenerating(false);
     }
   };
 
   /**
-   * FUNCTION: Update Topic
+   * FUNCTION: Handle Topic Editing
    * 
-   * PURPOSE: Handle topic editing with database persistence
-   * 
-   * WORKFLOW:
-   * 1. Optimistically update UI immediately
-   * 2. Send update to database
-   * 3. Update with server response (includes timestamps)
-   * 4. If error → rollback optimistic update + show error
-   * 5. If success → keep optimistic update
+   * PURPOSE: Update topic in database and local state
    */
-  const handleUpdateTopic = async (updatedTopic: Topic) => {
-    if (!auditContext?.auditId) {
-      return;
-    }
+  const handleEditTopic = async (topicId: string, updates: Partial<Topic>) => {
+    if (!auditContext?.auditId) return;
 
-    // STEP 1: Optimistic update (immediate UI feedback)
-    const previousTopics = [...topics];
-    const optimisticTopics = topics.map(topic => 
-      topic.id === updatedTopic.id ? updatedTopic : topic
-    );
-    setTopics(optimisticTopics);
-
+    setIsSaving(true);
+    
     try {
-      setIsSaving(true);
+      // Find the topic to get current category
+      const currentTopic = topics.find(t => t.id === topicId);
+      if (!currentTopic) {
+        throw new Error('Topic not found');
+      }
 
-      // STEP 2: Determine what fields changed
-      const originalTopic = previousTopics.find(t => t.id === updatedTopic.id);
       const updateRequest: UpdateTopicRequest = {
-        topicId: updatedTopic.id,
         auditId: auditContext.auditId,
+        topicId: topicId,
+        name: updates.name || currentTopic.name,
+        description: updates.description || currentTopic.description || ''
       };
 
-      // Add changed fields to update request
-      if (originalTopic?.name !== updatedTopic.name) {
-        updateRequest.name = updatedTopic.name;
-      }
-      if (originalTopic?.description !== updatedTopic.description) {
-        updateRequest.description = updatedTopic.description;
-      }
-
-      // Skip database call if nothing actually changed
-      if (!updateRequest.name && !updateRequest.description) {
-        console.log('📝 No changes detected, skipping database update');
-        setIsSaving(false);
-        return;
-      }
-
-      // STEP 3: Save to database
-      const updateResult = await updateTopicRequest(updateRequest);
+      const result = await updateTopicRequest(updateRequest);
       
-      if (!updateResult.success) {
-        throw new Error(updateResult.error || 'Failed to update topic');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update topic');
       }
 
-      // STEP 4: Update with server response (includes timestamps)
-      if (updateResult.data) {
-        const finalTopics = topics.map(topic => 
-          topic.id === updatedTopic.id ? updateResult.data! : topic
-        );
-        setTopics(finalTopics);
-      }
+      // Update local state
+      const updatedTopics = topics.map(topic => 
+        topic.id === topicId 
+          ? { ...topic, ...updates, editedByUser: true }
+          : topic
+      );
+      setTopics(updatedTopics);
 
-      console.log('✅ Topic updated successfully:', updatedTopic.name);
+      console.log(`✅ Updated topic: ${topicId}`);
 
     } catch (error) {
-      // STEP 5: Rollback on error
-      console.error('❌ Failed to update topic:', error);
-      setTopics(previousTopics); // Revert optimistic update
-      
+      console.error('💥 Error updating topic:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update topic');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // RENDER: Loading state
+  // Group topics by category
+  const groupedTopics = {
+    unbranded: topics.filter(t => t.category === 'unbranded'),
+    branded: topics.filter(t => t.category === 'branded'),
+    comparative: topics.filter(t => t.category === 'comparative')
+  };
+
+  // Loading state
   if (isLoading) {
     return (
-      <div className="space-y-8 animate-fade-in">
-        <TopicsHeader />
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center space-y-4">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto text-brand-purple" />
-            <div className="space-y-2">
-              <p className="text-lg font-medium">Loading Topics...</p>
-              <p className="text-sm text-text-secondary">
-                {hasExistingTopics ? 'Retrieving your saved topics' : 'Generating topics for your analysis'}
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <Loader2 className="h-8 w-8 animate-spin text-accent" />
+        <p className="text-sm text-muted-foreground">
+          {isGenerating ? 'Generating categorized topics...' : 'Loading topics...'}
+        </p>
       </div>
     );
   }
 
-  // RENDER: Error state
+  // Error state
   if (error) {
     return (
-      <div className="space-y-8 animate-fade-in">
-        <TopicsHeader />
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            {error}
+      <div className="space-y-4">
+        <Alert className="border-red-500/20 bg-red-500/5">
+          <AlertCircle className="h-4 w-4 text-red-400" />
+          <AlertDescription className="text-sm">
+            <strong className="text-red-400">Error loading topics:</strong> {error}
           </AlertDescription>
         </Alert>
+        
         <div className="flex justify-center">
-          <Button 
-            onClick={() => window.location.reload()} 
+          <Button
+            onClick={() => window.location.reload()}
             variant="outline"
-            className="flex items-center gap-2"
+            className="border-accent/20 text-accent hover:bg-accent/10"
           >
-            <RefreshCw className="h-4 w-4" />
-            Try Again
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
           </Button>
         </div>
       </div>
     );
   }
 
-  // RENDER: Main topics interface
   return (
-    <div className="space-y-8 animate-fade-in">
-      <TopicsHeader />
+    <div className="space-y-8">
+      {/* Explanation Section */}
+      <TopicsExplanationSection />
       
-      {/* Topics Grid */}
-      <TopicsGrid 
-        topics={topics} 
-        onUpdateTopic={handleUpdateTopic}
+      {/* Unbranded Topics Section */}
+      <TopicsCategorySection 
+        title="Unbranded Topics"
+        description="For monitoring whether AI mentions your brand in unprompted questions"
+        example="Best dating apps for college students"
+        topics={groupedTopics.unbranded}
+        categoryColor="bg-blue-500/10 border-blue-500/20"
+        targetCount={4}
+        onEditTopic={handleEditTopic}
       />
       
-      {/* Simple Instructions */}
-      <div className="text-center text-sm text-text-secondary">
-        <p>Click any topic to edit it</p>
-      </div>
+      {/* Branded Topics Section */}
+      <TopicsCategorySection 
+        title="Branded Topics" 
+        description="For monitoring what AI says about your brand when directly prompted"
+        example="Is Tinder good for serious relationships?"
+        topics={groupedTopics.branded}
+        categoryColor="bg-green-500/10 border-green-500/20"
+        targetCount={3}
+        onEditTopic={handleEditTopic}
+      />
+      
+      {/* Comparative Topics Section */}
+      <TopicsCategorySection 
+        title="Comparative Topics"
+        description="For monitoring how AI portrays your brand compared to others" 
+        example="Bumble vs Tinder for college students"
+        topics={groupedTopics.comparative}
+        categoryColor="bg-purple-500/10 border-purple-500/20"
+        targetCount={3}
+        onEditTopic={handleEditTopic}
+      />
+
+      {/* Generation Status */}
+      {generationSource && (
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground">
+            Topics generated using {generationSource === 'ai' ? 'AI' : 'fallback templates'}
+            {hasExistingTopics && ' (loaded from database)'}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
