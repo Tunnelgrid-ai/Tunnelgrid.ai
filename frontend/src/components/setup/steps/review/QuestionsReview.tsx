@@ -3,6 +3,7 @@ import { Question, Persona } from "@/types/brandTypes";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { EditBadge } from "./EditBadge";
 
 interface QuestionsReviewProps {
   questions: Question[];
@@ -46,6 +47,7 @@ export const QuestionsReview = ({ questions, personas }: QuestionsReviewProps) =
       {personas.map((persona) => {
         const personaQuestions = questionsByPersona[persona.id] || [];
         const isOpen = openPersonas.has(persona.id);
+        const hasEditedQuestions = personaQuestions.some(q => q.editedByUser);
 
         return (
           <Collapsible
@@ -64,16 +66,20 @@ export const QuestionsReview = ({ questions, personas }: QuestionsReviewProps) =
                 <span className="text-sm text-text-secondary">
                   ({personaQuestions.length} questions)
                 </span>
+                {hasEditedQuestions && <EditBadge isEdited={true} />}
               </div>
             </CollapsibleTrigger>
 
             <CollapsibleContent className="mt-2">
               <div className="p-4 bg-background border border-black/20 rounded-lg">
                 {personaQuestions.length > 0 ? (
-                  <ol className="space-y-2 list-decimal pl-6">
+                  <ol className="space-y-3 list-decimal pl-6">
                     {personaQuestions.map((question, index) => (
                       <li key={question.id} className="text-sm text-white">
-                        {question.text}
+                        <div className="flex items-center justify-between">
+                          <span className="flex-1">{question.text}</span>
+                          <EditBadge isEdited={question.editedByUser} className="ml-2" />
+                        </div>
                       </li>
                     ))}
                   </ol>

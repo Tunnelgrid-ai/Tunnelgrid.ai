@@ -79,4 +79,28 @@ class QuestionsStoreResponse(BaseModel):
     success: bool
     storedCount: int
     message: str
+
+class QuestionUpdateRequest(BaseModel):
+    """Request model for updating a question"""
+    text: Optional[str] = Field(None, min_length=1, max_length=500, description="Updated question text")
+    topicName: Optional[str] = Field(None, max_length=100, description="Updated topic name")
+    queryType: Optional[str] = Field(None, max_length=50, description="Updated query type")
+    
+    @validator('text')
+    def validate_text(cls, v):
+        if v is not None:
+            return v.strip() if v.strip() else None
+        return v
+    
+    @validator('topicName')
+    def validate_topic_name(cls, v):
+        if v is not None:
+            return v.strip() if v.strip() else None
+        return v
+
+class QuestionUpdateResponse(BaseModel):
+    """Response model for updating a question"""
+    success: bool
+    message: str
+    question: Optional[Question] = None
     errors: Optional[List[str]] = None 

@@ -86,4 +86,31 @@ class PersonaStoreResponse(BaseModel):
     success: bool
     storedCount: int
     message: str
+    errors: Optional[List[str]] = None
+
+class PersonaUpdateRequest(BaseModel):
+    """Request model for updating a persona"""
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="Updated persona name")
+    description: Optional[str] = Field(None, min_length=1, max_length=1000, description="Updated persona description")
+    painPoints: Optional[List[str]] = Field(None, description="Updated pain points")
+    motivators: Optional[List[str]] = Field(None, description="Updated motivators")
+    demographics: Optional[Demographics] = Field(None, description="Updated demographics")
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if v is not None:
+            return v.strip() if v.strip() else None
+        return v
+    
+    @validator('description')
+    def validate_description(cls, v):
+        if v is not None:
+            return v.strip() if v.strip() else None
+        return v
+
+class PersonaUpdateResponse(BaseModel):
+    """Response model for updating a persona"""
+    success: bool
+    message: str
+    persona: Optional[Persona] = None
     errors: Optional[List[str]] = None 

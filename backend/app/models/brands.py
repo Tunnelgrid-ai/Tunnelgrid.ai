@@ -80,4 +80,20 @@ class BrandUpdateResponse(BaseModel):
     success: bool
     message: str
     brand_id: Optional[str] = None
-    products_created: Optional[int] = None 
+    products_created: Optional[int] = None
+
+class BrandDescriptionUpdateRequest(BaseModel):
+    """Request model for updating just brand description"""
+    description: str = Field(..., min_length=1, max_length=1000, description="Updated brand description")
+    
+    @validator('description')
+    def validate_description(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Description cannot be empty or whitespace only')
+        return v.strip()
+
+class BrandDescriptionUpdateResponse(BaseModel):
+    """Response model for brand description update"""
+    success: bool
+    message: str
+    brand_id: Optional[str] = None 

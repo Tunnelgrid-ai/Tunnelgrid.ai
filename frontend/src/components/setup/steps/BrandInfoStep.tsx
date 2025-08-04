@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { createAudit, CreateAuditRequest } from "@/services/auditService";
+import { brandService } from "@/services/brandService";
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from 'uuid';
 import { User } from "@supabase/supabase-js";
@@ -141,35 +142,34 @@ export const BrandInfoStep = ({
     }
   };
 
-  // Save description changes to Supabase
+  // Save description changes via backend API
   const handleSaveDescription = async () => {
+    if (!brandId) {
+      alert('Brand ID is required to save description.');
+      return;
+    }
+    
     setIsSavingDescription(true);
     try {
-      // Update the brand table with the new description
-      const { error } = await supabase
-        .from('brand')
-        .update({ 
-          brand_description: editedDescription.trim() 
-        })
-        .eq('brand_id', brandId);
+      // Call backend API to update brand description
+      const response = await brandService.updateBrandDescription(brandId, editedDescription.trim());
 
-      if (error) {
-        console.error('Error updating brand description:', error);
-        alert('Failed to save description. Please try again.');
-        return;
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to save description');
       }
 
       // Update local state
       setBrandInfo({
         ...brandInfo,
-        description: editedDescription.trim()
+        description: editedDescription.trim(),
+        editedByUser: true
       });
 
       setIsEditingDescription(false);
-      console.log('✅ Brand description updated successfully');
+      console.log('✅ Brand description updated successfully via API');
       
     } catch (error) {
-      console.error('Unexpected error saving description:', error);
+      console.error('❌ Error saving description via API:', error);
       alert('Failed to save description. Please try again.');
     } finally {
       setIsSavingDescription(false);

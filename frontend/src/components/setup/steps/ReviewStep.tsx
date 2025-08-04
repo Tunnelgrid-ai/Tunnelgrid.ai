@@ -30,20 +30,15 @@ export const ReviewStep = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold mb-2 font-heading">Review Your Setup</h2>
-        <p className="text-text-secondary">
-          Review all the information you've provided before submitting.
-        </p>
+        <h2 className="text-xl font-semibold mb-2 font-heading">Final Review Before Starting Your Audit</h2>
       </div>
 
       {/* Step Guidance */}
       <Alert className="border-accent/20 bg-accent/5">
         <Rocket className="h-4 w-4 text-accent" />
         <AlertDescription className="text-sm">
-          <p>
-            <strong className="text-accent">Final review before launching your audit.</strong> 
-            Please verify all information is accurate. Once submitted, your brand analysis will begin 
-            and you'll be able to track your brand's visibility across AI systems.
+          <p> 
+          Please confirm all details. Once submitted, your brand analysis will begin, and you can track visibility across AI systems.
           </p>
         </AlertDescription>
       </Alert>

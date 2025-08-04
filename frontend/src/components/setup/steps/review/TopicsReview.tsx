@@ -1,4 +1,5 @@
 import { Product, Topic } from "@/types/brandTypes";
+import { EditBadge } from "./EditBadge";
 
 interface TopicsReviewProps {
   topics: Topic[];
@@ -21,7 +22,10 @@ export const TopicsReview = ({ topics, products }: TopicsReviewProps) => {
           key={topic.id}
           className="border border-black/20 rounded-md p-4 bg-card-dark"
         >
-          <h4 className="font-semibold text-white">{topic.name}</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-semibold text-white">{topic.name}</h4>
+            <EditBadge isEdited={topic.editedByUser} />
+          </div>
           {topic.description && <p className="text-sm mt-1 text-text-secondary">{topic.description}</p>}
           
           {topic.products && topic.products.length > 0 && (

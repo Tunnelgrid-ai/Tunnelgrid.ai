@@ -7,6 +7,7 @@ export interface BrandEntity {
   socialLinks: SocialLink[];
   wikiUrl?: string;
   knowledgePanel?: boolean;
+  editedByUser?: boolean;      // Whether user has modified this brand info
 }
 
 export interface SocialLink {
@@ -46,6 +47,8 @@ export interface Persona {
   };
   topicId?: string;
   productId?: string;
+  additionalContext?: string;
+  editedByUser?: boolean;      // Whether user has modified this persona
 }
 
 export interface Question {
@@ -53,9 +56,12 @@ export interface Question {
   text: string;
   personaId: string;
   auditId?: string;
+  topicId?: string;
   topicName?: string;
-  queryType?: string;
+  topicType?: 'unbranded' | 'branded' | 'comparative';
+  queryType?: string; // Legacy field, can be removed later
   aiResponses?: AIResponse[];
+  editedByUser?: boolean;      // Whether user has modified this question
 }
 
 export interface AIResponse {

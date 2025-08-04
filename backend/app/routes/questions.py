@@ -42,7 +42,8 @@ from ..core.database import get_supabase_client
 from ..models.common import HealthResponse
 from ..models.questions import (
     QuestionGenerateRequest, QuestionsResponse, Question,
-    QuestionsStoreRequest, QuestionsStoreResponse, QuestionsRetrieveResponse
+    QuestionsStoreRequest, QuestionsStoreResponse, QuestionsRetrieveResponse,
+    QuestionUpdateRequest, QuestionUpdateResponse
 )
 
 # Setup logging
@@ -66,28 +67,33 @@ def get_groq_api_key() -> Optional[str]:
     api_key = settings.GROQ_API_KEY
     return api_key
 
-def create_question_generation_prompt(brand_name: str, brand_description: Optional[str], brand_domain: str, 
-                                    product_name: str, topics: List[Dict], personas: List[Dict]) -> str:
-    """Create a comprehensive prompt for industry-focused question generation (brand info ignored to avoid bias)"""
-    
-    # Build topics context with more industry focus
+def create_question_generation_prompt(
+    brand_name: str,
+    brand_description: Optional[str],
+    brand_domain: str,
+    product_name: str,
+    topics: List[Dict],
+    personas: List[Dict]
+) -> str:
+    """
+    Create a prompt for generating industry and brand-specific search-style questions for each persona.
+    For branded questions, the brand_name is included and should be used in the question.
+    """
+    # Build topics context
     topics_context = "\n".join([
         f"- {topic.get('name', 'Unknown')}: {topic.get('description', 'No description')}"
         for topic in topics
     ])
-    
+
     # Build personas context
     personas_context = ""
     for persona in personas:
         persona_info = f"\n{persona.get('name', 'Unknown Persona')}:\n"
         persona_info += f"  Description: {persona.get('description', 'No description')}\n"
-        
         if persona.get('painPoints'):
             persona_info += f"  Pain Points: {', '.join(persona['painPoints'])}\n"
-        
         if persona.get('motivators'):
             persona_info += f"  Motivators: {', '.join(persona['motivators'])}\n"
-        
         if persona.get('demographics'):
             demo = persona['demographics']
             persona_info += f"  Demographics: "
@@ -97,55 +103,71 @@ def create_question_generation_prompt(brand_name: str, brand_description: Option
             if demo.get('location'): demo_parts.append(f"Location: {demo['location']}")
             if demo.get('goals'): demo_parts.append(f"Goals: {', '.join(demo['goals'])}")
             persona_info += "; ".join(demo_parts) + "\n"
-        
         personas_context += persona_info
-    
-    prompt = f"""You are an expert market researcher generating customer questions for industry analysis research.
 
-TOPICS TO ANALYZE:
+    prompt = f"""
+You are an AI assistant that generates realistic, user-style search queries for any type of product, service, blog, or website. The goal is to create queries that reflect how real users would search or ask AI models to discover, compare, or evaluate that item
+–––– INPUTS ––––
+TOPICS
 {topics_context}
 
-CUSTOMER PERSONAS:
+PERSONAS
 {personas_context}
 
-TASK: Generate exactly 10 insightful questions for EACH persona that they would naturally ask when researching solutions in these industry topics. Each question should:
+–––– TASK ––––
+For **each persona**, create **exactly 10 questions** they would naturally ask while researching the topics above.
 
-1. Be written from the persona's perspective and reflect their specific characteristics, pain points, and motivators
-2. Focus on industry evaluation, solution comparison, and decision-making factors
-3. Be general industry questions that would naturally mention brands, tools, or services when answered
-4. Help understand what brands/solutions each persona type naturally considers and why
-5. Sound like real questions this persona would ask when researching options
+**Mix of query styles**
+• Use both short keyword phrases and full questions.  
+  – Keyword: “best hiking shoes men”  
+  – Question: “What are the best hiking shoes for beginners?”  
 
-CRITICAL REQUIREMENTS:
-- Generate exactly 10 questions per persona (Total: {len(personas) * 10} questions)
-- Each question must include the exact persona ID from the context
-- Make questions persona-specific (reflect their pain points, motivators, demographics)
-- Questions should sound natural as if the persona is asking them
-- Focus on industry research, not specific brand evaluation
-- Questions should naturally elicit brand/tool mentions when answered by AI
+**Intent coverage inside those 10 questions**  
+- Discovery (“best [item type]”)  
+- Comparison (“[item] vs [competitor]”)  
+- Alternatives (“[item] alternatives”)  
+- Local (“[service] near me”, “[category] in [city]”)  
+- Reviews & trust (“is [item] good”, “[item] reviews”)  
+- Feature / problem (“[item] with warranty”, “how to use [item]”)  
+- Affordable (“cheap [item]”, “affordable [service]”)  
+- Guides (“how to choose [item type]”, “tips for [category]”)  
 
-EXAMPLES OF GOOD INDUSTRY-FOCUSED QUESTIONS:
-- "What are the best no-code website builders for someone with no technical background?"
-- "Which project management tools do most startups prefer and why?"
-- "What CRM solutions offer the best value for small businesses under 50 employees?"
-- "Which email marketing platforms have the highest deliverability rates?"
+**Category sense check**  
+Questions should make sense whether the item is:  
+- Physical product, digital product/app, service, local business, content site, or B2B / niche tool.
 
-OUTPUT FORMAT (JSON array only, no additional text):
+–––– QUESTION TYPE SPLIT ––––
+Per persona, produce:  
+- 4 **unbranded** questions (no brand names)  
+- 3 **branded** questions (name a brand/tool/service—**use this brand: "{brand_name}"**)  
+- 3 **comparative** questions (compare brands or ask for alternatives—**include "{brand_name}" in the comparison or alternatives**)  
+
+Set **queryType** to `"unbranded"`, `"branded"`, or `"comparative"`.
+
+–––– CRITICAL RULES ––––
+1. Exactly 10 questions per persona (total: {len(personas)*10}).  
+2. Include the persona’s **exact ID** in each question object.  
+3. Add a relevant **topicName** from the topics list.  
+4. Language must be plain, conversational, and free of hype.  
+5. Output **only** the JSON—no commentary.
+
+–––– OUTPUT FORMAT ––––
 [
   {{
     "text": "question text here",
     "personaId": "exact_persona_id_from_context",
-    "topicName": "most_relevant_topic_name",
-    "queryType": "brand_analysis"
+    "topicName": "exact_topic_name",
+    "queryType": "unbranded | branded | comparative"
   }},
-  ...
+  …
 ]
 
-PERSONA IDs TO USE:
-{chr(10).join([f"- {persona.get('name', 'Unknown')}: {persona.get('id', 'NO_ID')}" for persona in personas])}
+–––– PERSONA IDs ––––
+{chr(10).join([f"- {p.get('name','Unknown')}: {p.get('id','NO_ID')}" for p in personas])}
 
-Generate exactly {len(personas) * 10} questions now:"""
-    
+Generate the {len(personas)*10} questions now.
+"""
+    return prompt
     return prompt
 
 def parse_questions_from_response(response_text: str, personas: List[Dict]) -> Optional[List[Question]]:
@@ -841,6 +863,74 @@ async def store_questions(body: QuestionsStoreRequest):
     except Exception as e:
         logger.error(f"❌ Error storing questions: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@router.put("/{question_id}", response_model=QuestionUpdateResponse)
+async def update_question(question_id: str = Path(..., description="Question ID"), body: QuestionUpdateRequest = ...):
+    """
+    Update a specific question in the database
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Validate that at least one field is provided for update
+        update_data = {}
+        if body.text is not None:
+            update_data["query_text"] = body.text
+        if body.topicName is not None:
+            update_data["topic_name"] = body.topicName  
+        if body.queryType is not None:
+            update_data["query_type"] = body.queryType
+            
+        if not update_data:
+            return QuestionUpdateResponse(
+                success=False,
+                message="No valid fields provided for update",
+                errors=["At least one field (text, topicName, or queryType) must be provided"]
+            )
+        
+        # Update the question in database
+        result = supabase.table("queries").update(update_data).eq("query_id", question_id).execute()
+        
+        # Check for errors
+        if hasattr(result, 'error') and result.error:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Database update failed: {result.error}"
+            )
+        
+        if not result.data or len(result.data) == 0:
+            return QuestionUpdateResponse(
+                success=False,
+                message="Question not found or not updated",
+                errors=["Question with the specified ID was not found"]
+            )
+        
+        # Convert updated data back to Question model
+        updated_data = result.data[0]
+        updated_question = Question(
+            id=updated_data["query_id"],
+            text=updated_data["query_text"],
+            personaId=updated_data["persona"],
+            auditId=updated_data["audit_id"],
+            topicName=updated_data.get("topic_name"),
+            queryType=updated_data.get("query_type", "industry_analysis")
+        )
+        
+        logger.info(f"✅ Updated question {question_id}")
+        
+        return QuestionUpdateResponse(
+            success=True,
+            message="Question updated successfully",
+            question=updated_question
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error updating question: {e}")
+        return QuestionUpdateResponse(
+            success=False,
+            message=f"Failed to update question: {str(e)}",
+            errors=[str(e)]
+        )
 
 @router.get("/by-audit/{audit_id}", response_model=QuestionsRetrieveResponse)
 async def get_questions_by_audit(audit_id: str = Path(..., description="Audit ID")):

@@ -1,17 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Persona, Question, Topic, Product, BrandEntity } from "@/types/brandTypes";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { QuestionsHeader } from "./questions/QuestionsHeader";
-import { PersonaNavigation } from "./questions/PersonaNavigation";
-import { QuestionsList } from "./questions/QuestionsList";
+import { PersonaRail } from "./questions/PersonaRail";
+import { QuestionsTable } from "./questions/QuestionsTable";
 import { 
   generateAndStoreQuestions, 
   retryFailedPersonas,
   analyzeQuestionDistribution,
+  questionService,
   type QuestionGenerateRequest 
 } from "@/services/questionService";
 import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 interface QuestionsStepProps {
   questions: Question[];
@@ -38,33 +40,63 @@ export const QuestionsStep = ({
   topics,
   brandInfo,
   products,
-  auditContext,
+  auditContext
 }: QuestionsStepProps) => {
-  const [selectedPersonaId, setSelectedPersonaId] = useState<string>(
-    personas.length > 0 ? (personas[0].id as string) : ""
-  );
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isRetrying, setIsRetrying] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [retryStatus, setRetryStatus] = useState<string | null>(null);
-  
   const isMobile = useIsMobile();
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryStatus, setRetryStatus] = useState<string | null>(null);
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string>(
+    personas.length > 0 ? personas[0].id as string : ""
+  );
+  const [error, setError] = useState<string | null>(null);
+  
 
-  // 🔧 SYNC selectedPersonaId with available personas
-  useEffect(() => {
-    // If no personas are available, clear selection
-    if (personas.length === 0) {
-      setSelectedPersonaId("");
-      return;
+
+  // Group questions by persona ID for easy lookup
+  const questionsByPersona = useMemo(() => {
+    return questions.reduce((acc, question) => {
+      if (!acc[question.personaId]) {
+        acc[question.personaId] = [];
+      }
+      acc[question.personaId].push(question);
+      return acc;
+    }, {} as Record<string, Question[]>);
+  }, [questions]);
+
+  // Get questions for selected persona (no filtering)
+  const filteredQuestions = useMemo(() => {
+    return questionsByPersona[selectedPersonaId] || [];
+  }, [questionsByPersona, selectedPersonaId]);
+
+
+
+  // Question update handler
+  const handleQuestionUpdate = async (questionId: string, updates: Partial<Question>) => {
+    try {
+      // Update local state immediately for responsive UI
+      const updatedQuestions = questions.map(q => 
+        q.id === questionId ? { ...q, ...updates, editedByUser: true } : q
+      );
+      setQuestions(updatedQuestions);
+
+      // Call backend API to persist changes
+      const response = await questionService.updateQuestion(questionId, updates);
+      
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to update question');
+      }
+      
+      console.log('✅ Question updated successfully:', questionId, updates);
+      
+    } catch (error) {
+      console.error('❌ Failed to update question:', error);
+      setError('Failed to update question. Please try again.');
+      
+      // Revert optimistic update on error
+      setQuestions(questions);
     }
-    
-    // If current selectedPersonaId is not in the personas array, reset to first persona
-    const currentPersonaExists = personas.some(p => p.id === selectedPersonaId);
-    if (!currentPersonaExists) {
-      console.log(`🔄 selectedPersonaId '${selectedPersonaId}' not found in personas, resetting to first persona`);
-      setSelectedPersonaId(personas[0].id as string);
-    }
-  }, [personas, selectedPersonaId]);
+  };
 
   // Auto-generate questions when component mounts and required data is available
   useEffect(() => {
@@ -76,103 +108,86 @@ export const QuestionsStep = ({
       brandInfo.website &&
       products.length > 0 &&
       auditContext?.auditId &&
-      !isLoading;
-
-    console.log("🔍 Questions generation check:", {
-      questionsLength: questions.length,
-      personasLength: personas.length,
-      topicsLength: topics.length,
-      brandName: brandInfo.name,
-      brandWebsite: brandInfo.website,
-      productsLength: products.length,
-      auditId: auditContext?.auditId,
-      isLoading,
-      shouldGenerate: shouldGenerateQuestions
-    });
+      !isGenerating;
 
     if (shouldGenerateQuestions) {
-      console.log("✅ Triggering question generation...");
-      generateQuestionsForPersonas();
+      handleGenerateQuestions();
     }
-  }, [personas, topics, brandInfo, products, auditContext, questions.length, isLoading]);
+  }, [personas, topics, brandInfo, products, auditContext]);
 
-  // 🆕 AUTO-RETRY FAILED PERSONAS after initial generation
+  // Sync selectedPersonaId with available personas
   useEffect(() => {
-    if (questions.length > 0 && personas.length > 0 && !isLoading && !isRetrying) {
-      const distribution = analyzeQuestionDistribution(questions, personas);
-      
-      console.log("📊 Question Distribution Analysis:", distribution);
-      
-      if (distribution.needsRetry && distribution.failedPersonas.length > 0) {
-        console.log(`🔄 Auto-retrying ${distribution.failedPersonas.length} failed personas:`, 
-          distribution.failedPersonas.map(p => `${p.name} (${p.count} questions)`));
-        
-        setRetryStatus(`Retrying ${distribution.failedPersonas.length} personas with insufficient questions...`);
-        retryFailedPersonasAutomatically();
-      }
+    if (personas.length === 0) {
+      setSelectedPersonaId("");
+      return;
     }
-  }, [questions, personas, isLoading, isRetrying]);
+    
+    const currentPersonaExists = personas.some(p => p.id === selectedPersonaId);
+    if (!currentPersonaExists) {
+      setSelectedPersonaId(personas[0].id as string);
+    }
+  }, [personas, selectedPersonaId]);
 
-  const buildQuestionRequest = (): QuestionGenerateRequest | null => {
-    if (!auditContext?.auditId) {
-      setError("No audit context available for question generation");
-      return null;
+  const handleGenerateQuestions = async () => {
+    if (!auditContext?.auditId || personas.length === 0 || topics.length === 0) {
+      console.warn('⚠️ Missing required data for question generation');
+      return;
     }
 
-    // Get the primary product
-    const primaryProduct = products[0];
-    if (!primaryProduct) {
-      setError("No product available for question generation");
-      return null;
-    }
-
-    return {
-      auditId: auditContext.auditId,
-      brandName: brandInfo.name || "",
-      brandDescription: brandInfo.description || undefined,
-      brandDomain: brandInfo.website || "",
-      productName: primaryProduct.name || "",
-      topics: topics.map(topic => ({
-        id: topic.id as string,
-        name: topic.name,
-        description: topic.description,
-      })),
-      personas: personas.map(persona => ({
-        id: persona.id as string,
-        name: persona.name,
-        description: persona.description,
-        painPoints: persona.painPoints || [],
-        motivators: persona.motivators || [],
-        demographics: {
-          ageRange: persona.demographics?.ageRange || "",
-          gender: persona.demographics?.gender || "",
-          location: persona.demographics?.location || "",
-          goals: persona.demographics?.goals || [],
-        },
-      })),
-    };
-  };
-
-  const generateQuestionsForPersonas = async () => {
-    const request = buildQuestionRequest();
-    if (!request) return;
-
-    setIsLoading(true);
+    setIsGenerating(true);
     setError(null);
-    setRetryStatus(null);
 
     try {
-      console.log("🚀 Starting question generation process...");
-      console.log(`🌐 Generating questions for ${personas.length} personas and ${topics.length} topics...`);
-      
-      // Generate and store questions
-      const { generateResponse, storeResponse } = await generateAndStoreQuestions(request);
+      // Get the primary product
+      const primaryProduct = products[0];
+      if (!primaryProduct) {
+        setError("No product available for question generation");
+        return;
+      }
 
+      const generateRequest: QuestionGenerateRequest = {
+        auditId: auditContext.auditId,
+        brandName: brandInfo.name || "",
+        brandDescription: brandInfo.description || undefined,
+        brandDomain: brandInfo.website || "",
+        productName: primaryProduct.name || "",
+        topics: topics.map(topic => ({
+          id: topic.id as string,
+          name: topic.name,
+          description: topic.description,
+        })),
+        personas: personas.map(persona => ({
+          id: persona.id as string,
+          name: persona.name,
+          description: persona.description,
+          painPoints: persona.painPoints || [],
+          motivators: persona.motivators || [],
+          demographics: {
+            ageRange: persona.demographics?.ageRange || "",
+            gender: persona.demographics?.gender || "",
+            location: persona.demographics?.location || "",
+            goals: persona.demographics?.goals || [],
+          },
+        })),
+      };
+
+      console.log('🚀 Generating questions for all personas...');
+      const { generateResponse, storeResponse } = await generateAndStoreQuestions(generateRequest);
+      
       console.log("🎉 Initial API call completed successfully!");
 
       if (generateResponse.success) {
         console.log(`📊 Generated ${generateResponse.questions.length} questions`);
-        setQuestions(generateResponse.questions);
+        
+        // Transform questions to include required fields
+        const transformedQuestions = generateResponse.questions.map(q => ({
+          ...q,
+          topicId: q.topicId || getTopicIdForQuestion(q, topics),
+          topicName: q.topicName || getTopicNameForQuestion(q, topics),
+          topicType: getTopicTypeForQuestion(q, topics)
+        }));
+        
+        setQuestions(transformedQuestions);
         
         if (generateResponse.source === "fallback") {
           console.warn(`⚠️ Used fallback questions: ${generateResponse.reason}`);
@@ -181,37 +196,77 @@ export const QuestionsStep = ({
         if (!storeResponse.success) {
           console.warn("⚠️ Questions generated but storage failed:", storeResponse.message);
         }
+        
+        console.log('✅ Questions generated successfully');
       } else {
         throw new Error("Question generation failed");
       }
-
-    } catch (err) {
-      console.error("💥 Error in generateQuestionsForPersonas:", err);
-      
-      const errorMessage = err instanceof Error ? err.message : "Failed to generate questions";
-      setError(errorMessage);
+    } catch (error) {
+      console.error('💥 Error generating questions:', error);
+      setError(error instanceof Error ? error.message : 'Failed to generate questions');
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
     }
   };
 
-  const retryFailedPersonasAutomatically = async () => {
-    const request = buildQuestionRequest();
-    if (!request) return;
+  const handleRetryFailedPersonas = async () => {
+    if (!auditContext?.auditId) return;
 
     setIsRetrying(true);
-    setError(null);
+    setRetryStatus("Retrying failed personas...");
 
     try {
+      // Get the primary product
+      const primaryProduct = products[0];
+      if (!primaryProduct) {
+        setRetryStatus("❌ No product available for retry");
+        setTimeout(() => setRetryStatus(null), 5000);
+        return;
+      }
+
+      const generateRequest: QuestionGenerateRequest = {
+        auditId: auditContext.auditId,
+        brandName: brandInfo.name || "",
+        brandDescription: brandInfo.description || undefined,
+        brandDomain: brandInfo.website || "",
+        productName: primaryProduct.name || "",
+        topics: topics.map(topic => ({
+          id: topic.id as string,
+          name: topic.name,
+          description: topic.description,
+        })),
+        personas: personas.map(persona => ({
+          id: persona.id as string,
+          name: persona.name,
+          description: persona.description,
+          painPoints: persona.painPoints || [],
+          motivators: persona.motivators || [],
+          demographics: {
+            ageRange: persona.demographics?.ageRange || "",
+            gender: persona.demographics?.gender || "",
+            location: persona.demographics?.location || "",
+            goals: persona.demographics?.goals || [],
+          },
+        })),
+      };
+
       console.log("🔄 Starting automatic retry for failed personas...");
       
-      const { generateResponse, storeResponse } = await retryFailedPersonas(request);
-
+      const { generateResponse, storeResponse } = await retryFailedPersonas(generateRequest);
+      
       console.log("🎉 Retry completed successfully!");
 
       if (generateResponse.success) {
         console.log(`📊 Total questions after retry: ${generateResponse.questions.length}`);
-        setQuestions(generateResponse.questions);
+        
+        const transformedQuestions = generateResponse.questions.map(q => ({
+          ...q,
+          topicId: q.topicId || getTopicIdForQuestion(q, topics),
+          topicName: q.topicName || getTopicNameForQuestion(q, topics),
+          topicType: getTopicTypeForQuestion(q, topics)
+        }));
+        
+        setQuestions(transformedQuestions);
         setRetryStatus(`✅ Retry completed: ${generateResponse.questions.length} total questions`);
         
         // Clear retry status after 3 seconds
@@ -219,45 +274,46 @@ export const QuestionsStep = ({
       } else {
         throw new Error("Retry failed");
       }
-
-    } catch (err) {
-      console.error("💥 Error in retryFailedPersonasAutomatically:", err);
-      
-      const errorMessage = err instanceof Error ? err.message : "Failed to retry question generation";
-      setRetryStatus(`❌ Retry failed: ${errorMessage}`);
-      
-      // Clear error status after 5 seconds
+    } catch (error) {
+      console.error('💥 Error retrying personas:', error);
+      setRetryStatus(`❌ Retry failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setTimeout(() => setRetryStatus(null), 5000);
     } finally {
       setIsRetrying(false);
     }
   };
 
-  // Group questions by persona
-  const questionsByPersona: Record<string, Question[]> = {};
-  personas.forEach(persona => {
-    const personaQuestions = questions.filter(q => q.personaId === persona.id);
-    questionsByPersona[persona.id] = personaQuestions.slice(0, 10);
-  });
+  // Helper functions
+  const getTopicIdForQuestion = (question: Question, topics: Topic[]): string => {
+    const topic = topics.find(t => t.name === question.topicName);
+    return topic?.id || '';
+  };
 
-  // Calculate question distribution for UI feedback
-  const distribution = questions.length > 0 && personas.length > 0 
-    ? analyzeQuestionDistribution(questions, personas)
-    : null;
+  const getTopicNameForQuestion = (question: Question, topics: Topic[]): string => {
+    if (question.topicName) return question.topicName;
+    const topic = topics.find(t => t.id === question.topicId);
+    return topic?.name || 'Unknown Topic';
+  };
 
-  // Basic logging for verification
-  console.log(`🎯 Questions distribution:`, Object.entries(questionsByPersona).map(([personaId, qs]) => ({
-    personaName: personas.find(p => p.id === personaId)?.name || personaId,
-    count: qs.length
-  })));
-
-  // Handle persona selection
-  const handlePersonaSelect = (personaId: string) => {
-    setSelectedPersonaId(personaId);
+  const getTopicTypeForQuestion = (question: Question, topics: Topic[]): 'unbranded' | 'branded' | 'comparative' => {
+    // First try to find by topicId if it exists
+    if (question.topicId) {
+      const topic = topics.find(t => t.id === question.topicId);
+      if (topic) return topic.category;
+    }
+    
+    // Fall back to topicName
+    if (question.topicName) {
+      const topic = topics.find(t => t.name === question.topicName);
+      if (topic) return topic.category;
+    }
+    
+    // Default fallback
+    return 'unbranded';
   };
 
   // Loading state
-  if (isLoading) {
+  if (isGenerating) {
     return (
       <div className="space-y-6">
         <QuestionsHeader />
@@ -266,9 +322,8 @@ export const QuestionsStep = ({
           <div className="text-center">
             <h3 className="text-lg font-medium text-white">Generating Questions</h3>
             <p className="text-text-secondary mt-2">
-              Our AI is creating personalized questions based on your brand, personas, and topics...
+              Creating personalized questions for each customer persona...
             </p>
-            <p className="text-sm text-text-secondary mt-1">This may take up to a minute.</p>
           </div>
         </div>
       </div>
@@ -280,21 +335,20 @@ export const QuestionsStep = ({
     return (
       <div className="space-y-6">
         <QuestionsHeader />
-        <div className="flex flex-col items-center justify-center py-12 space-y-4">
-          <AlertTriangle className="h-8 w-8 text-red-400" />
-          <div className="text-center">
-            <h3 className="text-lg font-medium text-red-400">Error Generating Questions</h3>
-            <p className="text-text-secondary mt-2 max-w-md">
-              {error}
-            </p>
-            <button
-              onClick={generateQuestionsForPersonas}
-              className="mt-4 px-4 py-2 bg-[#00FFC2] text-black rounded-lg hover:bg-[#00E5AC] transition-colors"
+        <Alert className="border-red-500/20 bg-red-500/5">
+          <AlertTriangle className="h-4 w-4 text-red-400" />
+          <AlertDescription className="text-sm">
+            <p className="text-red-400 font-medium">Error: {error}</p>
+            <Button 
+              onClick={handleGenerateQuestions}
+              className="mt-3 bg-red-500 hover:bg-red-600 text-white"
+              size="sm"
             >
+              <RefreshCw className="h-4 w-4 mr-2" />
               Try Again
-            </button>
-          </div>
-        </div>
+            </Button>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -320,19 +374,9 @@ export const QuestionsStep = ({
     <div className="space-y-6">
       <QuestionsHeader />
 
-      {/* Step Guidance */}
-      <Alert className="border-accent/20 bg-accent/5">
-        <AlertTriangle className="h-4 w-4 text-accent" />
-        <AlertDescription className="text-sm">
-          <p>
-            <strong className="text-accent">Customize your analysis questions.</strong> 
-            These AI-generated questions will be used to analyze how your brand appears in AI conversations. 
-            Each question is tailored to specific personas and can be edited to better match your analysis goals.
-          </p>
-        </AlertDescription>
-      </Alert>
 
-      {/* 🆕 RETRY STATUS INDICATOR */}
+
+      {/* Retry Status Indicator */}
       {(isRetrying || retryStatus) && (
         <div className="bg-blue-900/20 border border-blue-500 rounded-lg p-3">
           <div className="flex items-center space-x-2">
@@ -348,47 +392,48 @@ export const QuestionsStep = ({
         </div>
       )}
 
-      {/* 🆕 QUESTION DISTRIBUTION SUMMARY */}
-      {distribution && (
-        <div className="bg-card-dark border border-black/20 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-white font-medium">
-                Total Questions: {distribution.totalQuestions}
-              </span>
-              <span className="text-text-secondary text-sm ml-2">
-                across {personas.length} personas
-              </span>
-            </div>
-            {distribution.failedPersonas.length > 0 && !isRetrying && (
-              <div className="flex items-center space-x-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-400" />
-                <span className="text-yellow-400 text-sm">
-                  {distribution.failedPersonas.length} personas need more questions
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className={`flex ${isMobile ? 'flex-col' : 'flex-row'} gap-4`}>
-        {/* Persona navigation */}
-        <PersonaNavigation
+      {/* Main Layout - Vertical Stack */}
+      <div className="space-y-6">
+        {/* Persona Grid - Top */}
+        <PersonaRail
           personas={personas}
           selectedPersonaId={selectedPersonaId}
-          onPersonaSelect={handlePersonaSelect}
+          onPersonaSelect={setSelectedPersonaId}
+          questionsByPersona={questionsByPersona}
+        />
+
+
+
+        {/* Questions Table */}
+        <QuestionsTable
+          questions={filteredQuestions}
+          topics={topics}
+          onQuestionUpdate={handleQuestionUpdate}
           isMobile={isMobile}
         />
 
-        {/* Questions list */}
-        <div className={`${isMobile ? 'w-full' : 'w-3/4'}`}>
-          <QuestionsList 
-            selectedPersonaId={selectedPersonaId}
-            personas={personas}
-            questionsByPersona={questionsByPersona}
-          />
-        </div>
+        {/* Retry Button for incomplete personas */}
+        {questionsByPersona && Object.keys(questionsByPersona).length < personas.length && (
+          <div className="flex justify-center pt-4">
+            <Button
+              onClick={handleRetryFailedPersonas}
+              disabled={isRetrying}
+              className="bg-yellow-600 hover:bg-yellow-700 text-white"
+            >
+              {isRetrying ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Retrying...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retry Failed Personas
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

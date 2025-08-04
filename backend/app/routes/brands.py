@@ -19,7 +19,7 @@ import logging
 import os
 from typing import Dict, Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Path
 from fastapi.responses import JSONResponse
 
 from ..core.config import settings
@@ -27,7 +27,8 @@ from ..core.database import get_supabase_client
 from ..models.brands import (
     BrandInsertRequest, BrandInsertResponse,
     BrandLlamaRequest, BrandLlamaResponse, 
-    BrandUpdateRequest, BrandUpdateResponse
+    BrandUpdateRequest, BrandUpdateResponse,
+    BrandDescriptionUpdateRequest, BrandDescriptionUpdateResponse
 )
 
 # Setup logging
@@ -403,6 +404,50 @@ async def update_brand_with_products(request: BrandUpdateRequest):
     except Exception as e:
         logger.error(f"❌ Error updating brand: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") 
+
+@router.put("/{brand_id}/description", response_model=BrandDescriptionUpdateResponse)
+async def update_brand_description(
+    brand_id: str = Path(..., description="Brand ID"),
+    body: BrandDescriptionUpdateRequest = ...
+):
+    """
+    Update brand description for a specific brand
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Update the brand description
+        result = supabase.table("brand").update({
+            "brand_description": body.description
+        }).eq("brand_id", brand_id).execute()
+        
+        # Check for errors
+        if hasattr(result, 'error') and result.error:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Database update failed: {result.error}"
+            )
+        
+        if not result.data or len(result.data) == 0:
+            return BrandDescriptionUpdateResponse(
+                success=False,
+                message="Brand not found or not updated"
+            )
+        
+        logger.info(f"✅ Updated brand description for brand {brand_id}")
+        
+        return BrandDescriptionUpdateResponse(
+            success=True,
+            message="Brand description updated successfully",
+            brand_id=brand_id
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error updating brand description: {e}")
+        return BrandDescriptionUpdateResponse(
+            success=False,
+            message=f"Failed to update brand description: {str(e)}"
+        )
 
 @router.get("/config/validate")
 async def validate_openai_config():

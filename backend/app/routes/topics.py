@@ -26,7 +26,7 @@ import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Path
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -90,6 +90,30 @@ class HealthCheckResponse(BaseModel):
     status: str
     services: Dict[str, str]
     message: str
+
+class TopicUpdateRequest(BaseModel):
+    """Request model for updating a topic"""
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="Updated topic name")
+    description: Optional[str] = Field(None, min_length=1, max_length=500, description="Updated topic description")
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if v is not None:
+            return v.strip() if v.strip() else None
+        return v
+    
+    @validator('description')
+    def validate_description(cls, v):
+        if v is not None:
+            return v.strip() if v.strip() else None
+        return v
+
+class TopicUpdateResponse(BaseModel):
+    """Response model for updating a topic"""
+    success: bool
+    message: str
+    topic: Optional[Topic] = None
+    errors: Optional[List[str]] = None
 
 # HELPER FUNCTIONS
 def get_groq_api_key() -> Optional[str]:
@@ -580,4 +604,73 @@ async def health_check():
         services=services,
         timestamp=datetime.utcnow().isoformat(),
         environment=settings.ENVIRONMENT
-    ) 
+    )
+
+@router.put("/{topic_id}", response_model=TopicUpdateResponse)
+async def update_topic(
+    topic_id: str = Path(..., description="Topic ID"),
+    body: TopicUpdateRequest = ...
+):
+    """
+    Update a specific topic's name and/or description
+    """
+    try:
+        from ..core.database import get_supabase_client
+        supabase = get_supabase_client()
+        
+        # Validate that at least one field is provided for update
+        update_data = {}
+        if body.name is not None:
+            update_data["topic_name"] = body.name
+        if body.description is not None:
+            update_data["topic_type"] = body.description  # Note: topic_type is used for description in DB
+            
+        if not update_data:
+            return TopicUpdateResponse(
+                success=False,
+                message="No valid fields provided for update",
+                errors=["At least one field (name or description) must be provided"]
+            )
+        
+        # Update the topic in database
+        result = supabase.table("topics").update(update_data).eq("topic_id", topic_id).execute()
+        
+        # Check for errors
+        if hasattr(result, 'error') and result.error:
+            return TopicUpdateResponse(
+                success=False,
+                message=f"Database update failed: {result.error}",
+                errors=[str(result.error)]
+            )
+        
+        if not result.data or len(result.data) == 0:
+            return TopicUpdateResponse(
+                success=False,
+                message="Topic not found or not updated",
+                errors=["Topic with the specified ID was not found"]
+            )
+        
+        # Convert updated data back to Topic model
+        updated_data = result.data[0]
+        updated_topic = Topic(
+            id=updated_data["topic_id"],
+            name=updated_data["topic_name"],
+            description=updated_data.get("topic_type", ""),
+            category=updated_data.get("topic_category", "unbranded")
+        )
+        
+        logger.info(f"✅ Updated topic {topic_id}")
+        
+        return TopicUpdateResponse(
+            success=True,
+            message="Topic updated successfully",
+            topic=updated_topic
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error updating topic: {e}")
+        return TopicUpdateResponse(
+            success=False,
+            message=f"Failed to update topic: {str(e)}",
+            errors=[str(e)]
+        ) 

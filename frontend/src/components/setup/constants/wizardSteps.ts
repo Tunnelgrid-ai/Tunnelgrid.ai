@@ -13,6 +13,6 @@ export const stepLabels = {
   "brand-info": "Verify Brand & Product",
   "topics": "Select Topics",
   "personas": "Review Personas", 
-  "questions": "Customize Questions",
+  "questions": "Review & Edit Prompts",
   "review": "Review & Launch"
 };

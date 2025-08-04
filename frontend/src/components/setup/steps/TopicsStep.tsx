@@ -16,10 +16,11 @@
  * 5. Topics are passed to wizard state for use in next steps
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Topic, Product } from "@/types/brandTypes";
 import { TopicsExplanationSection } from "./topics/TopicsExplanationSection";
-import { TopicsCategorySection } from "./topics/TopicsCategorySection";
+import { TopicsAccordionSection } from "./topics/TopicsAccordionSection";
+import { Accordion } from "@/components/ui/accordion";
 import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -74,6 +75,9 @@ export const TopicsStep: React.FC<TopicsStepProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [generationSource, setGenerationSource] = useState<'ai' | 'fallback' | null>(null);
   const [hasExistingTopics, setHasExistingTopics] = useState(false);
+  
+  // REF: Container ref for scroll management
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Initialize topics on component load
   useEffect(() => {
@@ -130,6 +134,31 @@ export const TopicsStep: React.FC<TopicsStepProps> = ({
 
     initializeTopics();
   }, [auditContext?.auditId]);
+
+  // Ensure page stays at top when component loads or finishes loading
+  useEffect(() => {
+    // Force scroll to top with multiple methods
+    const scrollToTop = () => {
+      if (containerRef.current) {
+        containerRef.current.scrollIntoView({ 
+          behavior: 'instant', 
+          block: 'start' 
+        });
+      }
+      // Also scroll window to top
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      // Force document scroll
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+    
+    scrollToTop();
+    
+    // Also run after a brief delay to catch any async rendering
+    const timeoutId = setTimeout(scrollToTop, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [isLoading, topics.length]);
 
   /**
    * FUNCTION: Generate and Store New Categorized Topics
@@ -246,11 +275,17 @@ export const TopicsStep: React.FC<TopicsStepProps> = ({
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <Loader2 className="h-8 w-8 animate-spin text-accent" />
-        <p className="text-sm text-muted-foreground">
-          {isGenerating ? 'Generating categorized topics...' : 'Loading topics...'}
-        </p>
+      <div ref={containerRef} className="space-y-8">
+        {/* Show explanation section even during loading */}
+        <TopicsExplanationSection />
+        
+        {/* Loading spinner below explanation */}
+        <div className="flex flex-col items-center justify-center py-12 space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-accent" />
+          <p className="text-sm text-muted-foreground">
+            {isGenerating ? 'Generating categorized topics...' : 'Loading topics...'}
+          </p>
+        </div>
       </div>
     );
   }
@@ -258,7 +293,7 @@ export const TopicsStep: React.FC<TopicsStepProps> = ({
   // Error state
   if (error) {
     return (
-      <div className="space-y-4">
+      <div ref={containerRef} className="space-y-4">
         <Alert className="border-red-500/20 bg-red-500/5">
           <AlertCircle className="h-4 w-4 text-red-400" />
           <AlertDescription className="text-sm">
@@ -281,52 +316,47 @@ export const TopicsStep: React.FC<TopicsStepProps> = ({
   }
 
   return (
-    <div className="space-y-8">
+    <div ref={containerRef} className="space-y-8">
       {/* Explanation Section */}
       <TopicsExplanationSection />
       
-      {/* Unbranded Topics Section */}
-      <TopicsCategorySection 
-        title="Unbranded Topics"
-        description="For monitoring whether AI mentions your brand in unprompted questions"
-        example="Best dating apps for college students"
-        topics={groupedTopics.unbranded}
-        categoryColor="bg-blue-500/10 border-blue-500/20"
-        targetCount={4}
-        onEditTopic={handleEditTopic}
-      />
-      
-      {/* Branded Topics Section */}
-      <TopicsCategorySection 
-        title="Branded Topics" 
-        description="For monitoring what AI says about your brand when directly prompted"
-        example="Is Tinder good for serious relationships?"
-        topics={groupedTopics.branded}
-        categoryColor="bg-green-500/10 border-green-500/20"
-        targetCount={3}
-        onEditTopic={handleEditTopic}
-      />
-      
-      {/* Comparative Topics Section */}
-      <TopicsCategorySection 
-        title="Comparative Topics"
-        description="For monitoring how AI portrays your brand compared to others" 
-        example="Bumble vs Tinder for college students"
-        topics={groupedTopics.comparative}
-        categoryColor="bg-purple-500/10 border-purple-500/20"
-        targetCount={3}
-        onEditTopic={handleEditTopic}
-      />
-
-      {/* Generation Status */}
-      {generationSource && (
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground">
-            Topics generated using {generationSource === 'ai' ? 'AI' : 'fallback templates'}
-            {hasExistingTopics && ' (loaded from database)'}
-          </p>
-        </div>
-      )}
+      {/* Topics Accordion - Only Unbranded expanded by default */}
+      <Accordion 
+        type="single" 
+        collapsible 
+        defaultValue="unbranded"
+        className="w-full space-y-4"
+      >
+        {/* Unbranded Topics Section */}
+        <TopicsAccordionSection 
+          value="unbranded"
+          title="Unbranded Topics"
+          description="For monitoring whether AI mentions your brand in unprompted questions"
+          topics={groupedTopics.unbranded}
+          categoryColor="bg-slate-800/50 border-slate-700/50"
+          onEditTopic={handleEditTopic}
+        />
+        
+        {/* Branded Topics Section */}
+        <TopicsAccordionSection 
+          value="branded"
+          title="Branded Topics" 
+          description="For monitoring what AI says about your brand when directly prompted"
+          topics={groupedTopics.branded}
+          categoryColor="bg-slate-800/50 border-slate-700/50"
+          onEditTopic={handleEditTopic}
+        />
+        
+        {/* Comparative Topics Section */}
+        <TopicsAccordionSection 
+          value="comparative"
+          title="Comparative Topics"
+          description="For monitoring how AI portrays your brand compared to others"
+          topics={groupedTopics.comparative}
+          categoryColor="bg-slate-800/50 border-slate-700/50"
+          onEditTopic={handleEditTopic}
+        />
+      </Accordion>
     </div>
   );
 };

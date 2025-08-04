@@ -68,6 +68,21 @@ export interface PersonaStoreResponse {
   errors?: string[];
 }
 
+export interface PersonaUpdateRequest {
+  name?: string;
+  description?: string;
+  painPoints?: string[];
+  motivators?: string[];
+  demographics?: Demographics;
+}
+
+export interface PersonaUpdateResponse {
+  success: boolean;
+  message: string;
+  persona?: PersonaResponse;
+  errors?: string[];
+}
+
 /**
  * Generate personas using AI based on brand and product information
  */
@@ -177,6 +192,55 @@ export async function storePersonas(request: PersonaStoreRequest): Promise<Perso
       storedCount: 0,
       message: error instanceof Error ? error.message : 'Unknown error storing personas'
     };
+  }
+}
+
+/**
+ * Update a specific persona
+ */
+export async function updatePersona(personaId: string, updates: PersonaUpdateRequest): Promise<PersonaUpdateResponse> {
+  try {
+    console.log('📝 Updating persona:', personaId, updates);
+
+    const response = await fetch(`${API_BASE_URL}/personas/${personaId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      
+      // Handle FastAPI validation errors properly
+      let errorMessage = 'Unknown error';
+      if (errorData.detail) {
+        if (Array.isArray(errorData.detail)) {
+          // FastAPI validation errors are arrays
+          errorMessage = errorData.detail.map((err: any) => 
+            `${err.loc?.join('.') || 'field'}: ${err.msg}`
+          ).join(', ');
+        } else {
+          errorMessage = errorData.detail;
+        }
+      }
+      
+      throw new Error(`Persona update failed: ${errorMessage}`);
+    }
+
+    const data: PersonaUpdateResponse = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.message || 'Persona update failed');
+    }
+    
+    console.log(`✅ Updated persona successfully:`, data.persona);
+    return data;
+    
+  } catch (error) {
+    console.error('❌ Persona update failed:', error);
+    throw error;
   }
 }
 
