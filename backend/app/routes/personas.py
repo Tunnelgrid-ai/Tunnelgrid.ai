@@ -39,7 +39,7 @@ from ..core.database import get_supabase_client
 from ..models.common import HealthResponse
 from ..models.personas import (
     PersonaGenerateRequest, PersonasResponse, Persona, Demographics,
-    PersonaStoreRequest, PersonaStoreResponse
+    PersonaStoreRequest, PersonaStoreResponse, PersonaUpdateRequest, PersonaUpdateResponse
 )
 
 # Setup logging
@@ -644,6 +644,118 @@ async def store_personas(body: PersonaStoreRequest):
     except Exception as e:
         logger.error(f"❌ Error storing personas: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@router.put("/{persona_id}", response_model=PersonaUpdateResponse)
+async def update_persona(persona_id: str = Path(..., description="Persona ID"), body: PersonaUpdateRequest = ...):
+    """
+    Update a specific persona in the database
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Validate that at least one field is provided for update
+        update_data = {}
+        
+        if body.name is not None:
+            update_data["persona_type"] = body.name
+        if body.description is not None:
+            update_data["persona_description"] = body.description
+        
+        # Handle complex fields (convert to JSON for storage)
+        if body.painPoints is not None or body.motivators is not None or body.demographics is not None:
+            # Get current characteristics to merge with updates
+            current_result = supabase.table("personas").select("persona_characteristics").eq("persona_id", persona_id).execute()
+            
+            if current_result.data and len(current_result.data) > 0:
+                try:
+                    current_characteristics = json.loads(current_result.data[0].get("persona_characteristics", "{}"))
+                except (json.JSONDecodeError, TypeError):
+                    current_characteristics = {}
+            else:
+                current_characteristics = {}
+            
+            # Update specific fields
+            if body.painPoints is not None:
+                current_characteristics["pain_points"] = body.painPoints
+            if body.motivators is not None:
+                current_characteristics["motivators"] = body.motivators
+            if body.demographics is not None:
+                current_characteristics["demographics"] = body.demographics.__dict__ if body.demographics else {}
+            
+            update_data["persona_characteristics"] = json.dumps(current_characteristics, indent=2)
+            
+        if not update_data:
+            return PersonaUpdateResponse(
+                success=False,
+                message="No valid fields provided for update",
+                errors=["At least one field (name, description, painPoints, motivators, or demographics) must be provided"]
+            )
+        
+        # Update the persona in database
+        result = supabase.table("personas").update(update_data).eq("persona_id", persona_id).execute()
+        
+        # Check for errors
+        if hasattr(result, 'error') and result.error:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Database update failed: {result.error}"
+            )
+        
+        if not result.data or len(result.data) == 0:
+            return PersonaUpdateResponse(
+                success=False,
+                message="Persona not found or not updated",
+                errors=["Persona with the specified ID was not found"]
+            )
+        
+        # Convert updated data back to Persona model
+        updated_data = result.data[0]
+        
+        # Parse characteristics JSON
+        characteristics_data = {}
+        try:
+            characteristics_text = updated_data.get("persona_characteristics", "{}")
+            characteristics_data = json.loads(characteristics_text) if characteristics_text else {}
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"Could not parse persona_characteristics for persona {persona_id}")
+            characteristics_data = {}
+        
+        # Create Demographics object if data exists
+        demographics = None
+        if "demographics" in characteristics_data and characteristics_data["demographics"]:
+            demo_data = characteristics_data["demographics"]
+            demographics = Demographics(
+                ageRange=demo_data.get("ageRange", ""),
+                gender=demo_data.get("gender", ""),
+                location=demo_data.get("location", ""),
+                goals=demo_data.get("goals", [])
+            )
+        
+        updated_persona = Persona(
+            id=updated_data["persona_id"],
+            name=updated_data["persona_type"],
+            description=updated_data["persona_description"],
+            painPoints=characteristics_data.get("pain_points", []),
+            motivators=characteristics_data.get("motivators", []),
+            demographics=demographics,
+            productId=updated_data.get("product_id")
+        )
+        
+        logger.info(f"✅ Updated persona {persona_id}")
+        
+        return PersonaUpdateResponse(
+            success=True,
+            message="Persona updated successfully",
+            persona=updated_persona
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error updating persona: {e}")
+        return PersonaUpdateResponse(
+            success=False,
+            message=f"Failed to update persona: {str(e)}",
+            errors=[str(e)]
+        )
 
 @router.get("/by-audit/{audit_id}", response_model=PersonasResponse)
 async def get_personas_by_audit(audit_id: str = Path(..., description="Audit ID")):

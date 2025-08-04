@@ -1,35 +1,44 @@
 import { Topic } from "@/types/brandTypes";
 import { TopicCard } from "./TopicCard";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent
+} from "@/components/ui/accordion";
 
-interface TopicsCategorySectionProps {
+interface TopicsAccordionSectionProps {
   title: string;
   description: string;
   topics: Topic[];
   categoryColor: string;
   onEditTopic?: (topicId: string, updates: Partial<Topic>) => void;
   onDeleteTopic?: (topicId: string) => void;
+  value: string; // For accordion control
 }
 
-export const TopicsCategorySection: React.FC<TopicsCategorySectionProps> = ({
+export const TopicsAccordionSection: React.FC<TopicsAccordionSectionProps> = ({
   title, 
   description, 
   topics, 
   categoryColor,
   onEditTopic,
-  onDeleteTopic
+  onDeleteTopic,
+  value
 }) => {
   return (
-    <div className={`p-6 rounded-lg border ${categoryColor}`}>
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="space-y-2">
+    <AccordionItem
+      value={value}
+      className={`border rounded-lg ${categoryColor}`}
+    >
+      <AccordionTrigger className="px-6 py-4 text-left hover:no-underline">
+        <div className="flex flex-col items-start space-y-1">
           <h3 className="text-lg font-semibold text-white">{title}</h3>
-          
           <p className="text-sm text-muted-foreground">{description}</p>
-          
-
         </div>
-        
+      </AccordionTrigger>
+      
+      <AccordionContent className="px-6 pb-6">
         {/* Topics Grid */}
         <div className="grid grid-cols-1 gap-3">
           {topics.map(topic => (
@@ -41,14 +50,14 @@ export const TopicsCategorySection: React.FC<TopicsCategorySectionProps> = ({
             />
           ))}
           
-          {/* Empty state or add button could go here */}
+          {/* Empty state */}
           {topics.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <p className="text-sm">No {title.toLowerCase()} generated yet</p>
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </AccordionContent>
+    </AccordionItem>
   );
-}; 
+};

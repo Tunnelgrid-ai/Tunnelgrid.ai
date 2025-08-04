@@ -1,4 +1,5 @@
 import { BrandEntity } from "@/types/brandTypes";
+import { EditBadge } from "./EditBadge";
 
 interface BrandInfoReviewProps {
   brandInfo: BrandEntity;
@@ -8,9 +9,11 @@ interface BrandInfoReviewProps {
 export const BrandInfoReview = ({ brandInfo, selectedProductName }: BrandInfoReviewProps) => {
   return (
     <div className="space-y-4 p-4 rounded-md bg-card-dark border border-black/20">
-      <div>
-        <h4 className="font-medium text-white">Brand Name</h4>
-        <p className="text-text-secondary">{brandInfo.name || "Not set"}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <h4 className="font-medium text-white">Brand Name</h4>
+          <p className="text-text-secondary">{brandInfo.name || "Not set"}</p>
+        </div>
       </div>
 
       <div>
@@ -20,7 +23,10 @@ export const BrandInfoReview = ({ brandInfo, selectedProductName }: BrandInfoRev
 
       {brandInfo.description && (
         <div>
-          <h4 className="font-medium text-white">Description</h4>
+          <div className="flex items-center justify-between mb-1">
+            <h4 className="font-medium text-white">Description</h4>
+            <EditBadge isEdited={brandInfo.editedByUser} />
+          </div>
           <p className="text-text-secondary">{brandInfo.description}</p>
         </div>
       )}

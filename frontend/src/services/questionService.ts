@@ -52,6 +52,13 @@ export interface QuestionsRetrieveResponse {
   message: string;
 }
 
+export interface QuestionUpdateResponse {
+  success: boolean;
+  message: string;
+  question?: Question;
+  errors?: string[];
+}
+
 class QuestionService {
   private baseUrl: string;
 
@@ -161,6 +168,43 @@ class QuestionService {
       return data;
     } catch (error) {
       console.error('❌ Question retrieval failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a specific question
+   */
+  async updateQuestion(questionId: string, updates: Partial<Question>): Promise<QuestionUpdateResponse> {
+    try {
+      console.log('📝 Updating question:', questionId, updates);
+      
+      const updateRequest = {
+        text: updates.text,
+        topicName: updates.topicName,
+        queryType: updates.queryType
+      };
+      
+      const response = await fetch(`${this.baseUrl}/${questionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateRequest),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        throw new Error(`API error: ${response.status} - ${errorData.detail || 'Question update failed'}`);
+      }
+
+      const data: QuestionUpdateResponse = await response.json();
+      
+      console.log(`✅ Updated question successfully:`, data.question);
+
+      return data;
+    } catch (error) {
+      console.error('❌ Question update failed:', error);
       throw error;
     }
   }

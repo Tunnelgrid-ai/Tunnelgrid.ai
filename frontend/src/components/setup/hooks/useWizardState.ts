@@ -12,7 +12,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { BrandEntity, Product, Topic, Persona, Question } from "@/types/brandTypes";
-import { useToast } from "@/hooks/use-toast";
 import { STEPS, SetupStep } from "../constants/wizardSteps";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -60,7 +59,6 @@ export const useWizardState = () => {
    */
   const [brandId, setBrandId] = useState<string | null>(null);
   
-  const { toast } = useToast();
   const location = useLocation();
 
   // Initialize brand information and products if available from navigation state
@@ -109,13 +107,6 @@ export const useWizardState = () => {
   const handleAuditCreated = (createdAuditId: string) => {
     console.log('🎉 Audit created successfully in wizard:', createdAuditId);
     setAuditId(createdAuditId);
-    
-    // Show success message
-    toast({
-      title: "Analysis Started",
-      description: "Your brand audit has been initiated!",
-      variant: "default"
-    });
     
     // Automatically proceed to Topics step
     nextStep();
@@ -167,11 +158,7 @@ export const useWizardState = () => {
     switch (currentStep) {
       case "brand-info":
         if (!brandInfo.name || !brandInfo.website || products.length === 0) {
-          toast({
-            title: "Missing information",
-            description: "Please provide brand information and select at least one product.",
-            variant: "destructive",
-          });
+          console.log('❌ Missing brand information or products');
           return false;
         }
         // NEW: Don't require audit ID here since it gets created in this step
@@ -180,19 +167,11 @@ export const useWizardState = () => {
       case "topics":
         // NEW: Require audit ID for topics step
         if (!auditId) {
-          toast({
-            title: "Audit Required",
-            description: "Please complete the brand information step first.",
-            variant: "destructive",
-          });
+          console.log('❌ Audit ID required for topics step');
           return false;
         }
         if (topics.length === 0) {
-          toast({
-            title: "No topics selected",
-            description: "Please select or add at least one topic.",
-            variant: "destructive",
-          });
+          console.log('❌ No topics selected');
           return false;
         }
         return true;
@@ -200,11 +179,7 @@ export const useWizardState = () => {
       case "personas":
         // NEW: Require audit ID for personas step
         if (!auditId) {
-          toast({
-            title: "Audit Required",
-            description: "Please complete the previous steps first.",
-            variant: "destructive",
-          });
+          console.log('❌ Audit ID required for personas step');
           return false;
         }
         // Remove validation for personas since this step is now read-only
@@ -213,19 +188,11 @@ export const useWizardState = () => {
       case "questions":
         // NEW: Require audit ID for questions step
         if (!auditId) {
-          toast({
-            title: "Audit Required",
-            description: "Please complete the previous steps first.",
-            variant: "destructive",
-          });
+          console.log('❌ Audit ID required for questions step');
           return false;
         }
         if (questions.length === 0) {
-          toast({
-            title: "No questions defined",
-            description: "Please add at least one question.",
-            variant: "destructive",
-          });
+          console.log('❌ No questions defined');
           return false;
         }
         return true;
@@ -233,11 +200,7 @@ export const useWizardState = () => {
       case "review":
         // NEW: Require audit ID for final review
         if (!auditId) {
-          toast({
-            title: "Audit Required",
-            description: "Please complete all previous steps first.",
-            variant: "destructive",
-          });
+          console.log('❌ Audit ID required for final review');
           return false;
         }
         return true;
@@ -323,11 +286,6 @@ export const useWizardState = () => {
       // STEP 1: Validate we have an audit to complete
       if (!auditId) {
         console.error('❌ No audit ID available for completion');
-        toast({
-          title: "Submission Error",
-          description: "No audit information found. Please restart the process.",
-          variant: "destructive"
-        });
         return;
       }
 
@@ -339,11 +297,6 @@ export const useWizardState = () => {
           topics: topics.length,
           personas: personas.length,
           questions: questions.length
-        });
-        toast({
-          title: "Incomplete Setup",
-          description: "Please complete all steps before submitting.",
-          variant: "destructive"
         });
         return;
       }
@@ -362,13 +315,6 @@ export const useWizardState = () => {
         throw new Error(completionResult.error || 'Failed to complete audit');
       }
 
-      // STEP 4: Show success message for audit completion
-      toast({
-        title: "Setup Complete!",
-        description: "Your brand analysis setup has been completed. Starting AI analysis...",
-        variant: "default"
-      });
-
       console.log('✅ Wizard completed successfully with audit:', auditId);
 
       // STEP 5: Start AI analysis
@@ -384,22 +330,12 @@ export const useWizardState = () => {
 
       if (analysisResult.success) {
         console.log('🎉 AI analysis completed successfully');
-        toast({
-          title: "Analysis Complete!",
-          description: "Your brand analysis has been completed successfully.",
-          variant: "default"
-        });
         
         // TODO: Navigate to results page
         // navigate(`/results/${auditId}`)
         
       } else {
         console.error('❌ AI analysis failed:', analysisResult.success === false ? analysisResult.error : 'Unknown error');
-        toast({
-          title: "Analysis Failed",
-          description: analysisResult.success === false ? (analysisResult.details || "AI analysis encountered an error.") : "AI analysis encountered an error.",
-          variant: "destructive"
-        });
       }
 
     } catch (error) {
@@ -407,21 +343,14 @@ export const useWizardState = () => {
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
-      // More specific error messages based on the error
-      let userMessage = errorMessage;
+      // Log error details for debugging
       if (errorMessage.includes('Database error')) {
-        userMessage = 'Database connection issue. Please try again.';
+        console.error('🗄️ Database connection issue');
       } else if (errorMessage.includes('not found')) {
-        userMessage = 'Audit record not found. Please restart the process.';
+        console.error('🔍 Audit record not found');
       } else if (errorMessage.includes('Failed to complete audit')) {
-        userMessage = 'Unable to complete audit. Please check your connection and try again.';
+        console.error('❌ Unable to complete audit');
       }
-      
-      toast({
-        title: "Submission Failed",
-        description: userMessage,
-        variant: "destructive"
-      });
     }
   };
 

@@ -19,6 +19,27 @@ import { supabase } from "@/integrations/supabase/client";
 import { Topic } from "@/types/brandTypes";
 import { v4 as uuidv4 } from 'uuid';
 
+// API Configuration
+const API_BASE_URL = 'http://localhost:8000/api';
+
+// Backend API interfaces for topics updates
+export interface TopicUpdateApiRequest {
+  name?: string;
+  description?: string;
+}
+
+export interface TopicUpdateApiResponse {
+  success: boolean;
+  message: string;
+  topic?: {
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+  };
+  errors?: string[];
+}
+
 /**
  * TYPE DEFINITION: Database Topic Record
  * 
@@ -344,47 +365,64 @@ export async function updateTopicRequest(request: UpdateTopicRequest): Promise<T
       };
     }
     
-    console.log('📝 Updating topic:', topicId);
+    console.log('📝 Updating topic via backend API:', topicId);
     
-    // PREPARE: Update data (only fields that exist in database)
-    const updateData: any = {};
+    // PREPARE: Update data for backend API
+    const updateRequest: TopicUpdateApiRequest = {};
     
     if (name !== undefined) {
-      updateData.topic_name = name.trim();
+      updateRequest.name = name.trim();
     }
     
     if (description !== undefined) {
-      updateData.topic_type = description.trim();
+      updateRequest.description = description.trim();
     }
     
-    // UPDATE: Topic in database
-    const { data: updatedTopics, error } = await supabase
-      .from('topics')
-      .update(updateData)
-      .eq('topic_id', topicId)
-      .eq('audit_id', auditId) // Extra security: ensure topic belongs to audit
-      .select('*');
-    
-    if (error) {
-      console.error('❌ Error updating topic:', error);
+    // CALL: Backend API to update topic
+    const response = await fetch(`${API_BASE_URL}/topics/${topicId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateRequest),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
       return {
         success: false,
-        error: `Failed to update topic: ${error.message}`
+        error: `API error: ${response.status} - ${errorData.detail || 'Topic update failed'}`
+      };
+    }
+
+    const apiResponse: TopicUpdateApiResponse = await response.json();
+    
+    if (!apiResponse.success) {
+      return {
+        success: false,
+        error: apiResponse.message || 'Topic update failed'
       };
     }
     
-    if (!updatedTopics || updatedTopics.length === 0) {
+    if (!apiResponse.topic) {
       return {
         success: false,
-        error: 'Topic not found or not updated'
+        error: 'Topic data not returned from API'
       };
     }
     
-    // TRANSFORM: Convert to app format
-    const updatedTopic = databaseTopicToAppTopic(updatedTopics[0]);
-    updatedTopic.editedByUser = true; // Mark as user-edited
+    // TRANSFORM: Convert API response to app format
+    const updatedTopic: TopicWithMetadata = {
+      id: apiResponse.topic.id,
+      name: apiResponse.topic.name,
+      description: apiResponse.topic.description,
+      category: apiResponse.topic.category as 'unbranded' | 'branded' | 'comparative',
+      editedByUser: true, // Mark as user-edited
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
     
-    console.log('✅ Successfully updated topic:', topicId);
+    console.log('✅ Successfully updated topic via API:', topicId);
     
     return {
       success: true,

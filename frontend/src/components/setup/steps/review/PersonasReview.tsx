@@ -6,6 +6,7 @@ import {
   AccordionTrigger, 
   AccordionContent 
 } from "@/components/ui/accordion";
+import { EditBadge } from "./EditBadge";
 
 interface PersonasReviewProps {
   personas: Persona[];
@@ -37,7 +38,10 @@ export const PersonasReview = ({ personas, topics, products }: PersonasReviewPro
             className="border border-black/20 rounded-lg bg-card-dark"
           >
             <AccordionTrigger className="px-4 py-3 text-left font-semibold text-base hover:no-underline">
-              {persona.name}
+              <div className="flex items-center justify-between w-full mr-4">
+                <span>{persona.name}</span>
+                <EditBadge isEdited={persona.editedByUser} />
+              </div>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4">
               <div className="space-y-3">

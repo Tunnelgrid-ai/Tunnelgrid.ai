@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Product, Topic, Persona } from "@/types/brandTypes";
-import { ReadOnlyPersonaList } from "./personas/ReadOnlyPersonaList";
+import { EditablePersonaList } from "./personas/EditablePersonaList";
 import { PersonasHeader } from "./personas/PersonasHeader";
 import { 
   generatePersonas, 
@@ -40,6 +40,9 @@ export const PersonasStep = ({
   const [hasAttemptedGeneration, setHasAttemptedGeneration] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   
+  // REF: Container ref for scroll management
+  const containerRef = useRef<HTMLDivElement>(null);
+  
   useEffect(() => {
     const generatePersonasAutomatically = async () => {
       if (hasAttemptedGeneration || personas.length > 0 || !auditContext?.auditId) {
@@ -72,6 +75,31 @@ export const PersonasStep = ({
 
     generatePersonasAutomatically();
   }, [auditContext, hasAttemptedGeneration, personas.length]);
+
+  // Ensure page stays at top when component loads or finishes loading
+  useEffect(() => {
+    // Force scroll to top with multiple methods
+    const scrollToTop = () => {
+      if (containerRef.current) {
+        containerRef.current.scrollIntoView({ 
+          behavior: 'instant', 
+          block: 'start' 
+        });
+      }
+      // Also scroll window to top
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      // Force document scroll
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+    
+    scrollToTop();
+    
+    // Also run after a brief delay to catch any async rendering
+    const timeoutId = setTimeout(scrollToTop, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [generationStatus, personas.length]);
 
   const handleGeneratePersonas = async () => {
     if (!auditContext?.brandName || !auditContext?.brandDomain || !auditContext?.selectedProduct) {
@@ -146,7 +174,7 @@ export const PersonasStep = ({
   // Show loading state
   if (generationStatus === 'loading' || isGenerating) {
     return (
-      <div className="space-y-6">
+      <div ref={containerRef} className="space-y-6">
         <PersonasHeader />
         
         <div className="flex items-center justify-center space-x-3 p-8 bg-card-dark rounded-lg border border-black/20">
@@ -162,7 +190,7 @@ export const PersonasStep = ({
   // Show error state  
   if (generationStatus === 'error') {
     return (
-      <div className="space-y-6">
+      <div ref={containerRef} className="space-y-6">
         <PersonasHeader />
         
         <div className="flex items-center justify-center space-x-3 p-8 bg-card-dark rounded-lg border border-red-500/20">
@@ -178,25 +206,19 @@ export const PersonasStep = ({
   // Show personas when ready
   if (personas.length > 0) {
     return (
-      <div className="space-y-6">
+      <div ref={containerRef} className="space-y-6">
         <PersonasHeader />
         
-        {/* Step Guidance */}
-        <Alert className="border-accent/20 bg-accent/5">
-          <AlertCircle className="h-4 w-4 text-accent" />
-          <AlertDescription className="text-sm">
-            <p>
-              <strong className="text-accent">Review your customer personas.</strong> 
-              These AI-generated personas represent your key target audiences based on your brand and product focus. 
-              They'll be used to create targeted analysis questions in the next step.
-            </p>
-          </AlertDescription>
-        </Alert>
-        
-        <ReadOnlyPersonaList
+        <EditablePersonaList
           personas={personas}
           topics={topics}
           products={products}
+          onPersonaUpdate={(updatedPersona) => {
+            const updatedPersonas = personas.map(p => 
+              p.id === updatedPersona.id ? updatedPersona : p
+            );
+            setPersonas(updatedPersonas);
+          }}
         />
       </div>
     );
@@ -204,7 +226,7 @@ export const PersonasStep = ({
 
   // Default state
   return (
-    <div className="space-y-6">
+    <div ref={containerRef} className="space-y-6">
       <PersonasHeader />
       
       <div className="flex items-center justify-center space-x-3 p-8 bg-card-dark rounded-lg border border-black/20">
