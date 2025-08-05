@@ -12,6 +12,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   
+  // Development mode - bypass authentication
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
   const { 
     signUp, 
     signInWithOtp, 
@@ -20,6 +23,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   } = useAuthActions();
 
   useEffect(() => {
+    // In development mode, create a mock user
+    if (isDevelopment) {
+      const mockUser = {
+        id: '72f7b6f6-ce78-41dd-a691-44d1ff8f7a01',
+        email: 'dev@example.com',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        aud: 'authenticated',
+        role: 'authenticated',
+        app_metadata: {},
+        user_metadata: {},
+        identities: [],
+        factors: []
+      } as User;
+      
+      setUser(mockUser);
+      setSession({
+        access_token: 'mock-token',
+        refresh_token: 'mock-refresh',
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        token_type: 'bearer',
+        user: mockUser
+      } as Session);
+      setLoading(false);
+      return;
+    }
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -43,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [isDevelopment]);
 
   return (
     <AuthContext.Provider

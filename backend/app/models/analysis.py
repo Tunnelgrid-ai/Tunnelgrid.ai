@@ -15,9 +15,45 @@ class AnalysisJobStatus(str, Enum):
     FAILED = "failed"
     PARTIAL_FAILURE = "partial_failure"
 
+class LLMServiceType(str, Enum):
+    """Enum for supported LLM services"""
+    OPENAI = "openai"
+    PERPLEXITY = "perplexity"
+    GEMINI = "gemini"
+
+class LLMServiceStatus(BaseModel):
+    """Model for individual LLM service status tracking"""
+    service: LLMServiceType
+    status: AnalysisJobStatus
+    progress_percentage: float = Field(0.0, ge=0.0, le=100.0)
+    completed_queries: int = Field(0, ge=0)
+    total_queries: int = Field(0, ge=0)
+    failed_queries: int = Field(0, ge=0)
+    error_message: Optional[str] = None
+    estimated_time_remaining: Optional[int] = Field(None, ge=0)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    @validator('progress_percentage')
+    def validate_progress(cls, v):
+        if not (0.0 <= v <= 100.0):
+            raise ValueError('Progress percentage must be between 0.0 and 100.0')
+        return v
+
+    @validator('completed_queries', 'failed_queries')
+    def validate_query_counts(cls, v, values):
+        total = values.get('total_queries', 0)
+        if v > total:
+            raise ValueError('Completed/failed queries cannot exceed total queries')
+        return v
+
 class AnalysisJobRequest(BaseModel):
     """Request model for starting AI analysis"""
     audit_id: str = Field(..., description="Audit ID to analyze")
+    services: Optional[List[LLMServiceType]] = Field(
+        default=[LLMServiceType.OPENAI], 
+        description="List of LLM services to use for analysis"
+    )
     
     @validator('audit_id')
     def validate_audit_id(cls, v):
@@ -25,12 +61,19 @@ class AnalysisJobRequest(BaseModel):
             raise ValueError('Audit ID cannot be empty')
         return v.strip()
 
+    @validator('services')
+    def validate_services(cls, v):
+        if not v or len(v) == 0:
+            raise ValueError('At least one LLM service must be specified')
+        return v
+
 class AIAnalysisRequest(BaseModel):
     """Request model for individual AI analysis call"""
     query_id: str = Field(..., description="Query ID from database")
     persona_description: str = Field(..., description="Persona description for system prompt")
     question_text: str = Field(..., description="Question text for user prompt")
     model: str = Field(..., description="AI model identifier (e.g., 'openai-4o')")
+    service: LLMServiceType = Field(..., description="LLM service to use")
     
     @validator('persona_description', 'question_text')
     def validate_text_fields(cls, v):
@@ -42,6 +85,7 @@ class Citation(BaseModel):
     """Model for citations extracted from AI responses"""
     text: str = Field(..., description="Citation text or reference")
     source_url: Optional[str] = Field(None, description="Source URL if available")
+    service: LLMServiceType = Field(..., description="LLM service that provided this citation")
     
     @validator('text')
     def validate_text(cls, v):
@@ -54,6 +98,7 @@ class BrandMention(BaseModel):
     brand_name: str = Field(..., description="Extracted brand name")
     context: str = Field(..., description="Context around the brand mention")
     sentiment_score: Optional[float] = Field(None, description="Sentiment score (-1 to 1)")
+    service: LLMServiceType = Field(..., description="LLM service that provided this mention")
     
     @validator('brand_name', 'context')
     def validate_text_fields(cls, v):
@@ -71,6 +116,7 @@ class AIAnalysisResponse(BaseModel):
     """Response model for individual AI analysis"""
     query_id: str
     model: str
+    service: LLMServiceType
     response_text: str
     citations: List[Citation] = []
     brand_mentions: List[BrandMention] = []
@@ -96,12 +142,14 @@ class AnalysisJobStatusResponse(BaseModel):
     created_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    # New field for multi-service tracking
+    service_statuses: Optional[List[LLMServiceStatus]] = Field(default=[], description="Status of each LLM service")
     
     @validator('progress_percentage')
     def validate_progress(cls, v):
         if not (0.0 <= v <= 100.0):
-            raise ValueError('Progress percentage must be between 0 and 100')
-        return round(v, 2)
+            raise ValueError('Progress percentage must be between 0.0 and 100.0')
+        return v
 
 class AnalysisJobResponse(BaseModel):
     """Response model for starting analysis job"""
@@ -110,6 +158,7 @@ class AnalysisJobResponse(BaseModel):
     message: str
     estimated_completion_time: Optional[datetime] = None
     total_queries: int = 0
+    services: List[LLMServiceType] = Field(default=[], description="LLM services being used")
     
     @validator('message')
     def validate_message(cls, v):
@@ -120,6 +169,7 @@ class AnalysisJobResponse(BaseModel):
 class AnalysisError(BaseModel):
     """Model for tracking analysis errors"""
     query_id: str
+    service: LLMServiceType
     error_type: str
     error_message: str
     timestamp: datetime
@@ -134,11 +184,12 @@ class AnalysisResults(BaseModel):
     responses: List[Dict[str, Any]] = Field(default=[], description="List of AI responses with query details")
     citations: List[Dict[str, Any]] = Field(default=[], description="List of extracted citations")
     brand_mentions: List[Dict[str, Any]] = Field(default=[], description="List of brand mentions with sentiment")
+    service_summary: Dict[LLMServiceType, Dict[str, Any]] = Field(default={}, description="Summary by service")
     
     @validator('total_responses', 'total_citations', 'total_brand_mentions')
     def validate_totals(cls, v):
         if v < 0:
-            raise ValueError('Total counts must be non-negative')
+            raise ValueError('Total counts cannot be negative')
         return v
 
 class AnalysisMetrics(BaseModel):
@@ -149,4 +200,5 @@ class AnalysisMetrics(BaseModel):
     api_calls_made: int
     success_rate: float
     citations_extracted: int
-    brand_mentions_extracted: int 
+    brand_mentions_extracted: int
+    service_metrics: Dict[LLMServiceType, Dict[str, Any]] = Field(default={}, description="Metrics by service") 

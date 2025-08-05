@@ -13,7 +13,7 @@ import ReportsPage from "./pages/ReportsPage";
 import { ComprehensiveReportPage } from "./pages/ComprehensiveReportPage";
 import SettingsPage from "./pages/SettingsPage";
 import AuthPage from "./pages/AuthPage";
-import MyReportsPage from "./pages/MyReportsPage";
+import { MyReportsPage } from "./pages/MyReportsPage";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +46,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/setup" element={<BrandSetupPage />} />
+            <Route path="/setup/:studyId" element={<BrandSetupPage />} />
             <Route path="/search" element={<BrandSearchPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/reports/:reportId" element={<ComprehensiveReportPage />} />

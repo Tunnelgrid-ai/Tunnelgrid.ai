@@ -17,7 +17,8 @@ from ..models.analysis import (
     AIAnalysisRequest, 
     AIAnalysisResponse, 
     Citation, 
-    BrandMention
+    BrandMention,
+    LLMServiceType
 )
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ class OpenAIService:
     @staticmethod
     async def analyze_brand_perception(request: AIAnalysisRequest) -> AIAnalysisResponse:
         """
-        Analyze brand perception using OpenAI GPT-4o
+        Analyze brand perception using OpenAI GPT-4o with retry logic for server errors
         
         Args:
             request: AIAnalysisRequest with query details and persona
@@ -39,90 +40,125 @@ class OpenAIService:
             AIAnalysisResponse with parsed citations and brand mentions
             
         Raises:
-            Exception: If API call fails or response is invalid
+            Exception: If API call fails after all retries or response is invalid
         """
         start_time = time.time()
+        max_retries = 3
+        retry_delay = 2  # seconds
         
-        try:
-            # Construct system prompt with persona context
-            system_prompt = OpenAIService._build_system_prompt(request.persona_description)
-            
-            # Prepare API request
-            headers = {
-                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            
-            payload = {
-                "model": "gpt-4o",  # Using GPT-4o specifically for brand analysis
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": request.question_text}
-                ],
-                "max_tokens": 4000,
-                "temperature": 0.7,
-                "presence_penalty": 0.1,  # Encourage diverse responses
-                "frequency_penalty": 0.1   # Reduce repetition
-            }
-            
-            logger.info(f"🤖 Making OpenAI API call for query {request.query_id}")
-            logger.debug(f"Persona: {request.persona_description[:100]}...")
-            logger.debug(f"Question: {request.question_text[:100]}...")
-            
-            # Make API call with timeout
-            timeout = httpx.Timeout(60.0)
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    OpenAIService.BASE_URL, 
-                    headers=headers, 
-                    json=payload
-                )
+        for attempt in range(max_retries):
+            try:
+                # Construct system prompt with persona context
+                system_prompt = OpenAIService._build_system_prompt(request.persona_description)
                 
-                if response.status_code != 200:
-                    error_msg = f"OpenAI API error: {response.status_code} - {response.text}"
-                    logger.error(error_msg)
-                    raise Exception(error_msg)
+                # Prepare API request
+                headers = {
+                    "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                    "Content-Type": "application/json"
+                }
                 
-                response_data = response.json()
-                ai_content = response_data["choices"][0]["message"]["content"]
-                token_usage = response_data.get("usage", {})
+                payload = {
+                    "model": "gpt-4o",  # Using GPT-4o specifically for brand analysis
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": request.question_text}
+                    ],
+                    "max_tokens": 4000,
+                    "temperature": 0.7,
+                    "presence_penalty": 0.1,  # Encourage diverse responses
+                    "frequency_penalty": 0.1   # Reduce repetition
+                }
                 
-                logger.info(f"✅ OpenAI response received for query {request.query_id}")
-                logger.debug(f"Response length: {len(ai_content)} characters")
-                logger.debug(f"Token usage: {token_usage}")
+                logger.info(f"🤖 Making OpenAI API call for query {request.query_id} (attempt {attempt + 1}/{max_retries})")
+                logger.debug(f"Persona: {request.persona_description[:100]}...")
+                logger.debug(f"Question: {request.question_text[:100]}...")
                 
-                # Check for annotations in the response
-                annotations = response_data["choices"][0]["message"].get("annotations", [])
-                if annotations:
-                    citations = OpenAIService._extract_citations_from_annotations(annotations)
-                    brand_mentions = OpenAIService._extract_brand_mentions_with_context(ai_content, annotations)
+                # Make API call with timeout
+                timeout = httpx.Timeout(60.0)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(
+                        OpenAIService.BASE_URL, 
+                        headers=headers, 
+                        json=payload
+                    )
+                    
+                    if response.status_code == 500:
+                        # Server error - retry
+                        error_msg = f"OpenAI server error (attempt {attempt + 1}/{max_retries}): {response.status_code} - {response.text}"
+                        logger.warning(error_msg)
+                        if attempt < max_retries - 1:
+                            logger.info(f"⏳ Retrying in {retry_delay} seconds...")
+                            await asyncio.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                            continue
+                        else:
+                            logger.error(f"❌ All retries exhausted for query {request.query_id}")
+                            raise Exception(f"OpenAI server error after {max_retries} attempts: {response.text}")
+                    elif response.status_code != 200:
+                        # Non-retryable error
+                        error_msg = f"OpenAI API error: {response.status_code} - {response.text}"
+                        logger.error(error_msg)
+                        raise Exception(error_msg)
+                    
+                    response_data = response.json()
+                    ai_content = response_data["choices"][0]["message"]["content"]
+                    token_usage = response_data.get("usage", {})
+                    
+                    logger.info(f"✅ OpenAI response received for query {request.query_id}")
+                    logger.debug(f"Response length: {len(ai_content)} characters")
+                    logger.debug(f"Token usage: {token_usage}")
+                    
+                    # Check for annotations in the response
+                    annotations = response_data["choices"][0]["message"].get("annotations", [])
+                    if annotations:
+                        citations = OpenAIService._extract_citations_from_annotations(annotations, request.service)
+                        brand_mentions = OpenAIService._extract_brand_mentions_with_context(ai_content, annotations, request.service)
+                    else:
+                        citations = OpenAIService._extract_citations(ai_content, request.service)
+                        brand_mentions = OpenAIService._extract_brand_mentions(ai_content, request.service)
+                    
+                    processing_time = int((time.time() - start_time) * 1000)
+                    
+                    logger.info(f"📊 Extracted {len(citations)} citations and {len(brand_mentions)} brand mentions")
+                    
+                    return AIAnalysisResponse(
+                        query_id=request.query_id,
+                        model=request.model,
+                        service=request.service,
+                        response_text=ai_content,
+                        citations=citations,
+                        brand_mentions=brand_mentions,
+                        processing_time_ms=processing_time,
+                        token_usage=token_usage
+                    )
+                    
+            except httpx.TimeoutException:
+                logger.error(f"❌ OpenAI API timeout for query {request.query_id} (attempt {attempt + 1})")
+                if attempt < max_retries - 1:
+                    logger.info(f"⏳ Retrying timeout in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
                 else:
-                    citations = OpenAIService._extract_citations(ai_content)
-                    brand_mentions = OpenAIService._extract_brand_mentions(ai_content)
-                
-                processing_time = int((time.time() - start_time) * 1000)
-                
-                logger.info(f"📊 Extracted {len(citations)} citations and {len(brand_mentions)} brand mentions")
-                
-                return AIAnalysisResponse(
-                    query_id=request.query_id,
-                    model=request.model,
-                    response_text=ai_content,
-                    citations=citations,
-                    brand_mentions=brand_mentions,
-                    processing_time_ms=processing_time,
-                    token_usage=token_usage
-                )
-                
-        except httpx.TimeoutException:
-            logger.error(f"❌ OpenAI API timeout for query {request.query_id}")
-            raise Exception("OpenAI API request timed out")
-        except httpx.RequestError as e:
-            logger.error(f"❌ OpenAI API request error for query {request.query_id}: {e}")
-            raise Exception(f"OpenAI API request failed: {str(e)}")
-        except Exception as e:
-            logger.error(f"❌ Unexpected error in OpenAI analysis for query {request.query_id}: {e}")
-            raise
+                    raise Exception("OpenAI API request timed out after all retries")
+            except httpx.RequestError as e:
+                logger.error(f"❌ OpenAI API request error for query {request.query_id} (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    logger.info(f"⏳ Retrying request error in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    raise Exception(f"OpenAI API request failed after all retries: {str(e)}")
+            except Exception as e:
+                logger.error(f"❌ Unexpected error in OpenAI analysis for query {request.query_id} (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    logger.info(f"⏳ Retrying unexpected error in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    raise
     
     @staticmethod
     def _build_system_prompt(persona_description: str) -> str:
@@ -150,7 +186,7 @@ Important guidelines:
 Your response should feel authentic and provide valuable insights about brand perception from your unique perspective."""
 
     @staticmethod
-    def _extract_citations(text: str) -> List[Citation]:
+    def _extract_citations(text: str, service: LLMServiceType) -> List[Citation]:
         """
         Extract citations and references from AI response text
         
@@ -171,7 +207,8 @@ Your response should feel authentic and provide valuable insights about brand pe
             clean_url = re.sub(r'[.,;!?]+$', '', url)
             citations.append(Citation(
                 text=f"Referenced URL: {clean_url}",
-                source_url=clean_url
+                source_url=clean_url,
+                service=service
             ))
         
         # Pattern 2: Source references
@@ -192,7 +229,7 @@ Your response should feel authentic and provide valuable insights about brand pe
             for match in matches:
                 clean_match = match.strip()
                 if len(clean_match) > 3:  # Filter out very short matches
-                    citations.append(Citation(text=clean_match))
+                    citations.append(Citation(text=clean_match, service=service))
         
         # Pattern 3: Bracketed references
         bracket_pattern = r'\[([^\]]{1,100})\]'
@@ -200,7 +237,7 @@ Your response should feel authentic and provide valuable insights about brand pe
         for match in bracket_matches:
             clean_match = match.strip()
             if len(clean_match) > 3:
-                citations.append(Citation(text=clean_match))
+                citations.append(Citation(text=clean_match, service=service))
         
         # Remove duplicates while preserving order
         seen_texts = set()
@@ -213,7 +250,7 @@ Your response should feel authentic and provide valuable insights about brand pe
         return unique_citations
     
     @staticmethod
-    def _extract_brand_mentions(text: str) -> List[BrandMention]:
+    def _extract_brand_mentions(text: str, service: LLMServiceType) -> List[BrandMention]:
         """
         Extract brand mentions from AI response text
         
@@ -261,7 +298,8 @@ Your response should feel authentic and provide valuable insights about brand pe
                 brand_mentions.append(BrandMention(
                     brand_name=brand_name,
                     context=context,
-                    sentiment_score=sentiment_score
+                    sentiment_score=sentiment_score,
+                    service=service
                 ))
         
         # Remove duplicates while preserving order
@@ -321,7 +359,7 @@ Your response should feel authentic and provide valuable insights about brand pe
         return max(-1.0, min(1.0, sentiment_score))
 
     @staticmethod
-    def _extract_citations_from_annotations(annotations: List[Dict[str, Any]]) -> List[Citation]:
+    def _extract_citations_from_annotations(annotations: List[Dict[str, Any]], service: LLMServiceType) -> List[Citation]:
         """
         Extract citations from GPT-4 search preview API annotations
         Args:
@@ -335,12 +373,13 @@ Your response should feel authentic and provide valuable insights about brand pe
                 url_citation = annotation.get('url_citation', {})
                 citations.append(Citation(
                     text=url_citation.get('title', ''),
-                    source_url=url_citation.get('url')
+                    source_url=url_citation.get('url'),
+                    service=service
                 ))
         return citations
 
     @staticmethod
-    def _extract_brand_mentions_with_context(text: str, annotations: List[Dict[str, Any]]) -> List[BrandMention]:
+    def _extract_brand_mentions_with_context(text: str, annotations: List[Dict[str, Any]], service: LLMServiceType) -> List[BrandMention]:
         """
         Extract brand mentions with context from both the main text and citations
         Args:
@@ -351,7 +390,7 @@ Your response should feel authentic and provide valuable insights about brand pe
         """
         brand_mentions = []
         # Extract brand mentions from main text
-        main_mentions = OpenAIService._extract_brand_mentions(text)
+        main_mentions = OpenAIService._extract_brand_mentions(text, service)
         brand_mentions.extend(main_mentions)
         # Extract brand mentions from citation contexts
         for annotation in annotations:
@@ -360,7 +399,7 @@ Your response should feel authentic and provide valuable insights about brand pe
                 start_idx = url_citation.get('start_index', 0)
                 end_idx = url_citation.get('end_index', 0)
                 context = text[start_idx:end_idx]
-                citation_mentions = OpenAIService._extract_brand_mentions(context)
+                citation_mentions = OpenAIService._extract_brand_mentions(context, service)
                 for mention in citation_mentions:
                     # Optionally associate the source_url with the mention if needed
                     mention.source_url = url_citation.get('url')

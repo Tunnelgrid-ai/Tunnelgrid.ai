@@ -44,6 +44,7 @@ from .routes.audits import router as audits_router
 from .routes.personas import router as personas_router
 from .routes.questions import router as questions_router
 from .routes.analysis import router as analysis_router
+from .routes.studies import router as studies_router
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -165,6 +166,12 @@ app.include_router(
     tags=["analysis"]
 )
 
+app.include_router(
+    studies_router,
+    prefix="/api/studies",
+    tags=["studies"]
+)
+
 # ROOT ENDPOINT
 @app.get("/")
 async def root():
@@ -184,7 +191,8 @@ async def root():
             "audits": "/api/audits",
             "personas": "/api/personas",
             "questions": "/api/questions",
-            "analysis": "/api/analysis"
+            "analysis": "/api/analysis",
+            "studies": "/api/studies"
         }
     }
 

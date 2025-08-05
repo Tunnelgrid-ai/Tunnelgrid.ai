@@ -32,13 +32,15 @@ from slowapi.util import get_remote_address
 
 from ..core.database import get_supabase_client
 from ..core.config import settings
+from ..core.performance_config import PerformanceConfig
 from ..models.analysis import (
     AnalysisJobRequest,
     AnalysisJobResponse, 
     AnalysisJobStatusResponse,
     AnalysisJobStatus,
     AIAnalysisRequest,
-    AnalysisResults
+    AnalysisResults,
+    LLMServiceType
 )
 from ..services.ai_analysis import openai_service
 
@@ -157,6 +159,15 @@ async def start_analysis(request: AnalysisJobRequest, background_tasks: Backgrou
         
         logger.info(f"✅ Created analysis job {job_id} with {len(queries_result.data)} queries")
         
+        # Update audit status to analysis_running
+        try:
+            supabase.table("audit").update({
+                "status": "analysis_running"
+            }).eq("audit_id", validated_audit_id).execute()
+            logger.info(f"🔄 Updated audit {validated_audit_id} status to 'analysis_running'")
+        except Exception as status_error:
+            logger.warning(f"⚠️ Failed to update audit status to 'analysis_running': {status_error}")
+        
         # Start background processing
         background_tasks.add_task(
             process_analysis_job,
@@ -180,7 +191,7 @@ async def start_analysis(request: AnalysisJobRequest, background_tasks: Backgrou
         logger.error(f"❌ Error starting analysis: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to start analysis: {str(e)}")
 
-@router.get("/status/{job_id}", response_model=AnalysisJobStatus)
+@router.get("/status/{job_id}", response_model=AnalysisJobStatusResponse)
 async def get_job_status(job_id: str):
     """
     Get the current status of an analysis job
@@ -206,7 +217,7 @@ async def get_job_status(job_id: str):
         if job['total_queries'] > 0:
             progress_percentage = (job['completed_queries'] / job['total_queries']) * 100
         
-        return AnalysisJobStatus(
+        return AnalysisJobStatusResponse(
             job_id=job['job_id'],
             audit_id=job['audit_id'],
             status=job['status'],
@@ -316,7 +327,8 @@ async def process_analysis_job(
         failed = 0
         
         # Process queries in batches to avoid overwhelming APIs
-        batch_size = 3  # Conservative batch size for OpenAI API
+        batch_size = PerformanceConfig.get_optimal_batch_size(len(queries))
+        logger.info(f"📊 Using batch size: {batch_size} for {len(queries)} queries")
         
         for i in range(0, len(queries), batch_size):
             batch = queries[i:i + batch_size]
@@ -337,7 +349,8 @@ async def process_analysis_job(
                     query_id=query["query_id"],
                     persona_description=persona["persona_description"],
                     question_text=query["query_text"],
-                    model="openai-4o"
+                    model="openai-4o",
+                    service=LLMServiceType.OPENAI
                 )
                 
                 # Add to batch processing
@@ -364,15 +377,29 @@ async def process_analysis_job(
             
             logger.info(f"📊 Progress: {completed}/{len(queries)} completed, {failed} failed")
             
-            # Rate limiting delay between batches
+            # Rate limiting delay between batches (reduced for faster processing)
             if i + batch_size < len(queries):  # Don't delay after last batch
-                logger.info("⏳ Rate limiting delay...")
-                await asyncio.sleep(2)
+                batch_number = (i // batch_size) + 1
+                total_batches = (len(queries) + batch_size - 1) // batch_size
+                delay = PerformanceConfig.get_batch_delay(batch_number, total_batches)
+                logger.info(f"⏳ Rate limiting delay: {delay}s (batch {batch_number}/{total_batches})")
+                await asyncio.sleep(delay)
         
         # Determine final status
         if failed == 0:
             final_status = AnalysisJobStatus.COMPLETED.value
             logger.info(f"✅ Job {job_id} completed successfully")
+            
+            # Mark audit as completed since analysis finished successfully
+            try:
+                logger.info(f"🎉 Marking audit {audit_id} as completed after successful analysis")
+                supabase.table("audit").update({
+                    "status": "completed"
+                }).eq("audit_id", audit_id).execute()
+                logger.info(f"✅ Audit {audit_id} marked as completed")
+            except Exception as audit_error:
+                logger.error(f"❌ Failed to mark audit {audit_id} as completed: {audit_error}")
+                
         elif completed > 0:
             final_status = AnalysisJobStatus.PARTIAL_FAILURE.value
             logger.warning(f"⚠️ Job {job_id} completed with {failed} failures")

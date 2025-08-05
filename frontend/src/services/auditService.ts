@@ -331,16 +331,116 @@ export async function updateAuditStatus(auditId: string, status: string): Promis
 }
 
 /**
- * FUNCTION: Complete Audit
+ * FUNCTION: Mark Setup Complete
  * 
- * PURPOSE: Mark audit as 'completed' when user finishes the entire wizard
+ * PURPOSE: Mark audit setup as complete (ready for analysis)
  * 
  * BUSINESS LOGIC:
- * - Called when user reaches the review step and submits
- * - Updates audit status from 'in_progress' to 'completed'
- * - Records completion timestamp for analytics
+ * - Called when user finishes the setup wizard and is ready to start analysis
+ * - Updates audit status from 'in_progress' to 'setup_completed'
+ * - This happens before AI analysis starts
  * 
- * USAGE: Called from wizard's final submission process
+ * USAGE: Called from wizard's final submission process before starting analysis
+ * 
+ * NEW APPROACH: Uses backend API instead of direct Supabase client
+ * to avoid RLS permission issues
+ * 
+ * @param auditId - ID of audit to mark setup complete
+ * @returns Promise with success/error status
+ */
+export async function markSetupComplete(auditId: string): Promise<AuditServiceResponse> {
+  // DEV MODE CHECK: Works with fake or real user ID
+  if (DEV_MODE) {
+    console.log('🛠️ DEV MODE: Marking setup complete with development settings');
+  }
+
+  try {
+    // VALIDATION: Check audit ID
+    if (!auditId || auditId.trim() === '') {
+      return {
+        success: false,
+        error: 'Audit ID is required'
+      };
+    }
+
+    console.log('✅ Marking setup complete via backend API:', auditId);
+
+    // NEW APPROACH: Use backend API instead of direct Supabase client
+    const response = await fetch(`/api/audits/${auditId}/mark-setup-complete`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Backend API error:', response.status, errorText);
+      
+      // Handle specific error codes
+      if (response.status === 404) {
+        return {
+          success: false,
+          error: 'Audit not found. Please verify the audit ID.'
+        };
+      } else if (response.status === 500) {
+        return {
+          success: false,
+          error: 'Database error occurred. Please try again.'
+        };
+      } else {
+        return {
+          success: false,
+          error: `Server error: ${response.status} ${errorText}`
+        };
+      }
+    }
+
+    const result = await response.json();
+    console.log('✅ Backend API response:', result);
+
+    if (result.success) {
+      console.log('✅ Setup marked as complete via backend:', auditId);
+      return {
+        success: true,
+        data: result.data
+      };
+    } else {
+      return {
+        success: false,
+        error: result.message || 'Unknown error from backend'
+      };
+    }
+
+  } catch (error) {
+    console.error('💥 Unexpected error marking setup complete:', error);
+    
+    // Handle network errors
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      return {
+        success: false,
+        error: 'Network error. Please check your connection and try again.'
+      };
+    }
+    
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+}
+
+/**
+ * FUNCTION: Complete Audit
+ * 
+ * PURPOSE: Mark audit as 'completed' after analysis finishes
+ * 
+ * BUSINESS LOGIC:
+ * - Called when AI analysis job completes successfully
+ * - Updates audit status from 'setup_completed' to 'completed'
+ * - This happens after all AI analysis work is done
+ * 
+ * USAGE: Called from backend analysis job when it finishes successfully
  * 
  * NEW APPROACH: Uses backend API instead of direct Supabase client
  * to avoid RLS permission issues

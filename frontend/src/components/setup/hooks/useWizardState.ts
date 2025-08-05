@@ -15,6 +15,16 @@ import { BrandEntity, Product, Topic, Persona, Question } from "@/types/brandTyp
 import { STEPS, SetupStep } from "../constants/wizardSteps";
 import { v4 as uuidv4 } from 'uuid';
 
+// Add study management imports and functionality
+import { 
+  studyService, 
+  Study, 
+  StudyStep, 
+  StudyStatus,
+  saveProgress,
+  getProgress 
+} from '@/services/studyService';
+
 export const useWizardState = () => {
   const [currentStep, setCurrentStep] = useState<SetupStep>("brand-info");
   const [brandInfo, setBrandInfo] = useState<BrandEntity>({
@@ -58,6 +68,100 @@ export const useWizardState = () => {
    * WHEN: Set when user navigates from search page with selected brand
    */
   const [brandId, setBrandId] = useState<string | null>(null);
+  
+  // Analysis loading state
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisJobId, setAnalysisJobId] = useState<string>('');
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  
+  // Persist analysis state to prevent disappearing on re-renders
+  useEffect(() => {
+    const savedJobId = sessionStorage.getItem('analysisJobId');
+    const savedLoading = sessionStorage.getItem('analysisLoading');
+    
+    if (savedJobId && savedLoading === 'true') {
+      setAnalysisJobId(savedJobId);
+      setAnalysisLoading(true);
+      console.log('🔄 Restored analysis state from session storage');
+    }
+  }, []);
+  
+  // Save analysis state to session storage
+  useEffect(() => {
+    if (analysisLoading) {
+      sessionStorage.setItem('analysisLoading', 'true');
+      sessionStorage.setItem('analysisJobId', analysisJobId);
+    } else {
+      sessionStorage.removeItem('analysisLoading');
+      sessionStorage.removeItem('analysisJobId');
+    }
+  }, [analysisLoading, analysisJobId]);
+
+  // Add study state to the hook
+  const [currentStudy, setCurrentStudy] = useState<Study | null>(null);
+  const [studyId, setStudyId] = useState<string | null>(null);
+  
+  // Add study management functions
+  const loadStudyProgress = async (studyId: string) => {
+    try {
+      const result = await getProgress(studyId);
+      if (result.success && result.data) {
+        // Restore wizard state from saved progress
+        const stepData = result.data.step_data;
+        
+        // Restore brand info
+        if (stepData.brandInfo) {
+          setBrandInfo(stepData.brandInfo);
+        }
+        
+        // Restore personas
+        if (stepData.personas) {
+          setPersonas(stepData.personas);
+        }
+        
+        // Restore products
+        if (stepData.products) {
+          setProducts(stepData.products);
+        }
+        
+        // Restore questions
+        if (stepData.questions) {
+          setQuestions(stepData.questions);
+        }
+        
+        // Restore topics
+        if (stepData.topics) {
+          setTopics(stepData.topics);
+        }
+        
+        console.log('✅ Study progress restored successfully');
+      }
+    } catch (error) {
+      console.error('❌ Failed to load study progress:', error);
+    }
+  };
+
+  const saveStudyProgress = async (stepName: StudyStep, stepData: any) => {
+    if (!studyId) return;
+    
+    try {
+      const progressPercentage = studyService.calculateProgressPercentage(stepName);
+      
+      const result = await saveProgress(studyId, {
+        step_name: stepName,
+        step_data: stepData,
+        progress_percentage: progressPercentage
+      });
+      
+      if (result.success) {
+        console.log('✅ Study progress saved successfully');
+      } else {
+        console.error('❌ Failed to save study progress:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ Error saving study progress:', error);
+    }
+  };
   
   const location = useLocation();
 
@@ -303,39 +407,64 @@ export const useWizardState = () => {
 
       console.log('🚀 Submitting setup and completing audit:', auditId);
 
-      // STEP 3: Complete the audit in database
-      console.log('📝 Calling completeAudit...');
-      const { completeAudit } = await import('@/services/auditService');
-      const completionResult = await completeAudit(auditId);
+      // STEP 2.5: Create or update study if we have study management
+      if (!studyId && brandId) {
+        console.log('📝 Creating new study...');
+        try {
+          const { createStudy } = await import('@/services/studyService');
+          const studyResult = await createStudy({
+            brand_id: brandId, // Use the actual brand ID
+            study_name: `${brandInfo.name} Brand Analysis`,
+            study_description: `Brand analysis study for ${brandInfo.name}`
+          });
 
-      console.log('📋 Audit completion result:', completionResult);
-
-      if (!completionResult.success) {
-        console.error('❌ Audit completion failed:', completionResult.error);
-        throw new Error(completionResult.error || 'Failed to complete audit');
+          if (studyResult.success) {
+            setStudyId(studyResult.data.study_id);
+            console.log('✅ Study created successfully:', studyResult.data.study_id);
+          } else {
+            console.warn('⚠️ Failed to create study, continuing without study management:', studyResult.error);
+          }
+        } catch (error) {
+          console.warn('⚠️ Error creating study, continuing without study management:', error);
+        }
+      } else if (!brandId) {
+        console.log('⚠️ No brand ID available, skipping study creation');
       }
 
-      console.log('✅ Wizard completed successfully with audit:', auditId);
+      // STEP 3: Mark setup as complete (ready for analysis)
+      console.log('📝 Calling markSetupComplete...');
+      const { markSetupComplete } = await import('@/services/auditService');
+      const setupResult = await markSetupComplete(auditId);
 
-      // STEP 5: Start AI analysis
+      console.log('📋 Setup completion result:', setupResult);
+
+      if (!setupResult.success) {
+        console.error('❌ Setup completion failed:', setupResult.error);
+        throw new Error(setupResult.error || 'Failed to mark setup as complete');
+      }
+
+      console.log('✅ Setup marked as complete, ready for analysis:', auditId);
+
+      // STEP 4: Start AI analysis and show loading screen
       console.log('🤖 Starting AI analysis for audit:', auditId);
       
       // Import analysis service dynamically to avoid circular dependencies
-      const { runCompleteAnalysis } = await import('@/services/analysisService');
+      const { startAnalysisJob } = await import('@/services/analysisService');
       
-      // Start the analysis process - this will redirect to loading screen
-      const analysisResult = await runCompleteAnalysis(auditId, (status) => {
-        console.log('📊 Analysis progress:', status.progress_percentage + '%');
-      });
-
+      // Set loading state to show the loading screen immediately
+      setAnalysisLoading(true);
+      
+      // Start the analysis job and get job ID immediately
+      const analysisResult = await startAnalysisJob(auditId);
+      
       if (analysisResult.success) {
-        console.log('🎉 AI analysis completed successfully');
-        
-        // TODO: Navigate to results page
-        // navigate(`/results/${auditId}`)
-        
+        console.log('🎉 AI analysis job started successfully');
+        setAnalysisJobId(analysisResult.data.job_id);
+        // Keep loading screen active - it will handle completion via polling
       } else {
-        console.error('❌ AI analysis failed:', analysisResult.success === false ? analysisResult.error : 'Unknown error');
+        console.error('❌ AI analysis failed:', 'Unknown error');
+        setAnalysisLoading(false);
+        throw new Error('Failed to start AI analysis');
       }
 
     } catch (error) {
@@ -354,20 +483,68 @@ export const useWizardState = () => {
     }
   };
 
+  // Add study initialization
+  const initializeStudy = async (studyId: string) => {
+    setStudyId(studyId);
+    await loadStudyProgress(studyId);
+  };
+
+  // Update existing setter functions to save progress
+  const setBrandInfoWithProgress = (info: BrandEntity) => {
+    setBrandInfo(info);
+    if (studyId) {
+      saveStudyProgress(StudyStep.BRAND_INFO, { brandInfo: info });
+    }
+  };
+
+  const setPersonasWithProgress = (personas: Persona[]) => {
+    setPersonas(personas);
+    if (studyId) {
+      saveStudyProgress(StudyStep.PERSONAS, { personas });
+    }
+  };
+
+  const setProductsWithProgress = (products: Product[]) => {
+    setProducts(products);
+    if (studyId) {
+      saveStudyProgress(StudyStep.PRODUCTS, { products });
+    }
+  };
+
+  const setQuestionsWithProgress = (questions: Question[]) => {
+    setQuestions(questions);
+    if (studyId) {
+      saveStudyProgress(StudyStep.QUESTIONS, { questions });
+    }
+  };
+
+  const setTopicsWithProgress = (topics: Topic[]) => {
+    setTopics(topics);
+    if (studyId) {
+      saveStudyProgress(StudyStep.TOPICS, { topics });
+    }
+  };
+
+  // Return study management functions
   return {
     currentStep,
     setCurrentStep,
     brandInfo,
     setBrandInfo,
+    setBrandInfoWithProgress, // NEW: Setter with progress saving
     products,
     setProducts,
+    setProductsWithProgress, // NEW: Setter with progress saving
     availableProducts,
     topics,
     setTopics,
+    setTopicsWithProgress, // NEW: Setter with progress saving
     personas,
     setPersonas,
+    setPersonasWithProgress, // NEW: Setter with progress saving
     questions,
     setQuestions,
+    setQuestionsWithProgress, // NEW: Setter with progress saving
     nextStep,
     prevStep,
     handleNext,
@@ -385,5 +562,20 @@ export const useWizardState = () => {
     triggerAuditCreation,
     setTriggerAuditCreation,
     handleNextWithAuditCheck,
+    // NEW: Analysis loading state
+    analysisLoading,
+    setAnalysisLoading,
+    analysisJobId,
+    setAnalysisJobId,
+    analysisProgress,
+    setAnalysisProgress,
+    // NEW: Study management functions
+    currentStudy,
+    setCurrentStudy,
+    studyId,
+    setStudyId,
+    initializeStudy,
+    saveStudyProgress,
+    loadStudyProgress
   };
 };
