@@ -5,7 +5,8 @@ PURPOSE: Audit creation and management
 
 ENDPOINTS:
 - POST /create - Create a new audit
-- PUT /{audit_id}/complete - Complete an audit
+- PUT /{audit_id}/mark-setup-complete - Mark setup as complete (ready for analysis)
+- PUT /{audit_id}/complete - Complete an audit after analysis finishes
 
 ARCHITECTURE:
 Frontend → FastAPI Backend → Supabase → Backend → Frontend
@@ -72,18 +73,70 @@ async def create_audit(audit: AuditCreateRequest):
         logger.error(f"❌ Error creating audit: {e}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-@router.put("/{audit_id}/complete")
-async def complete_audit(audit_id: str):
+@router.put("/{audit_id}/mark-setup-complete")
+async def mark_setup_complete(audit_id: str):
     """
-    Complete an audit by updating its status to 'completed'
+    Mark audit setup as complete (ready for analysis)
     
-    This endpoint uses the service role key to bypass RLS policies,
-    ensuring the update works even when frontend client has permission issues.
+    This endpoint is called when the user finishes the setup wizard
+    and is ready to start AI analysis. The audit status changes from
+    'in_progress' to 'setup_completed'.
     """
     try:
         supabase = get_supabase_client()
         
-        logger.info(f"🔄 Completing audit: {audit_id}")
+        logger.info(f"🔄 Marking setup as complete for audit: {audit_id}")
+        
+        # STEP 1: Check if audit exists
+        check_result = supabase.table("audit").select("audit_id, status").eq("audit_id", audit_id).execute()
+        
+        if not check_result.data:
+            logger.warning(f"❌ Audit not found: {audit_id}")
+            raise HTTPException(status_code=404, detail="Audit not found")
+        
+        current_audit = check_result.data[0]
+        logger.info(f"📋 Found audit {audit_id} with status: {current_audit['status']}")
+        
+        # STEP 2: Update audit status to setup_completed
+        update_result = supabase.table("audit").update({
+            "status": "setup_completed"
+        }).eq("audit_id", audit_id).execute()
+        
+        # Check for errors in update operation
+        if hasattr(update_result, 'error') and update_result.error:
+            logger.error(f"❌ Update failed: {update_result.error}")
+            raise HTTPException(status_code=500, detail=f"Update failed: {update_result.error}")
+        
+        logger.info(f"✅ Successfully marked setup as complete for audit: {audit_id}")
+        
+        return {
+            "success": True,
+            "data": {
+                "audit_id": audit_id,
+                "status": "setup_completed"
+            },
+            "message": "Audit setup marked as complete"
+        }
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error marking setup complete for audit {audit_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@router.put("/{audit_id}/complete")
+async def complete_audit(audit_id: str):
+    """
+    Complete an audit after analysis finishes successfully
+    
+    This endpoint is called when the AI analysis job completes successfully.
+    The audit status changes to 'completed' only after all analysis work is done.
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        logger.info(f"🔄 Completing audit after analysis: {audit_id}")
         
         # STEP 1: Check if audit exists
         check_result = supabase.table("audit").select("audit_id, status").eq("audit_id", audit_id).execute()
@@ -105,7 +158,7 @@ async def complete_audit(audit_id: str):
             logger.error(f"❌ Update failed: {update_result.error}")
             raise HTTPException(status_code=500, detail=f"Update failed: {update_result.error}")
         
-        logger.info(f"✅ Successfully completed audit: {audit_id}")
+        logger.info(f"✅ Successfully completed audit after analysis: {audit_id}")
         
         return {
             "success": True,
@@ -113,7 +166,7 @@ async def complete_audit(audit_id: str):
                 "audit_id": audit_id,
                 "status": "completed"
             },
-            "message": "Audit completed successfully"
+            "message": "Audit completed successfully after analysis"
         }
         
     except HTTPException:

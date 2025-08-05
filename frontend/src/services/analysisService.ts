@@ -301,6 +301,46 @@ class AnalysisService {
   }
 
   /**
+   * Start analysis and return job ID immediately (for loading screen)
+   */
+  async startAnalysisJob(
+    auditId: string
+  ): Promise<AnalysisServiceResult<{ job_id: string; total_queries: number }>> {
+    try {
+      console.log('🚀 Starting analysis job for audit:', auditId);
+
+      const startResult = await this.startAnalysis(auditId);
+      if (!startResult.success) {
+        const errorResult = startResult as AnalysisError;
+        return {
+          success: false,
+          error: errorResult.error,
+          details: errorResult.details
+        };
+      }
+
+      console.log('✅ Analysis job started successfully');
+      return {
+        success: true,
+        data: {
+          job_id: startResult.data.job_id,
+          total_queries: startResult.data.total_queries
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Failed to start analysis job:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return {
+        success: false,
+        error: 'Failed to start analysis job',
+        details: errorMessage
+      };
+    }
+  }
+
+  /**
    * Complete analysis workflow: start job and poll until completion
    */
   async runCompleteAnalysis(
@@ -568,6 +608,7 @@ export const analysisService = new AnalysisService();
 
 // Helper functions for common operations
 export const startAnalysis = (auditId: string) => analysisService.startAnalysis(auditId);
+export const startAnalysisJob = (auditId: string) => analysisService.startAnalysisJob(auditId);
 export const getJobStatus = (jobId: string) => analysisService.getJobStatus(jobId);
 export const getAnalysisResults = (auditId: string) => analysisService.getResults(auditId);
 export const runCompleteAnalysis = (auditId: string, onProgress?: (status: AnalysisJobStatus) => void) => 
