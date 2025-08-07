@@ -53,6 +53,11 @@ class Settings:
     OPENAI_SEARCH_TEMPERATURE: float = float(os.getenv("OPENAI_SEARCH_TEMPERATURE", "0.7"))
     OPENAI_SEARCH_TIMEOUT: float = float(os.getenv("OPENAI_SEARCH_TIMEOUT", "60.0"))
 
+    # OpenAI Responses API configuration
+    OPENAI_RESPONSES_MODEL: str = os.getenv("OPENAI_RESPONSES_MODEL", "gpt-4o")
+    OPENAI_WEB_SEARCH_TOOL_VERSION: str = os.getenv("OPENAI_WEB_SEARCH_TOOL_VERSION", "web_search")
+    OPENAI_SEARCH_CONTEXT_SIZE: str = os.getenv("OPENAI_SEARCH_CONTEXT_SIZE", "medium")
+
     # Web search options configuration
     OPENAI_SEARCH_USER_LOCATION_COUNTRY: Optional[str] = os.getenv("OPENAI_SEARCH_USER_LOCATION_COUNTRY", "US")
     OPENAI_SEARCH_USER_LOCATION_CITY: Optional[str] = os.getenv("OPENAI_SEARCH_USER_LOCATION_CITY")
@@ -103,6 +108,11 @@ class Settings:
     def has_openai_config(self) -> bool:
         """Check if OpenAI API is properly configured"""
         return bool(self.OPENAI_API_KEY)
+    
+    @property
+    def has_openai_websearch_config(self) -> bool:
+        """Check if OpenAI web search is properly configured"""
+        return bool(self.OPENAI_API_KEY and self.OPENAI_RESPONSES_MODEL)
 
 # Global settings instance
 settings = Settings()

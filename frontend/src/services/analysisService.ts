@@ -46,11 +46,16 @@ export interface AnalysisJobStatus {
   error_message?: string;
 }
 
+// Update the Citation interface to include the new fields
+
 export interface Citation {
   citation_id: string;
   response_id: string;
-  citation_text: string;
+  citation_text: string;  // This will now contain the actual cited text
   source_url?: string;
+  source_title?: string;  // New field
+  start_index?: number;   // New field
+  end_index?: number;     // New field
   extracted_at: string;
 }
 

@@ -85,6 +85,9 @@ class Citation(BaseModel):
     """Model for citations extracted from AI responses"""
     text: str = Field(..., description="Citation text or reference")
     source_url: Optional[str] = Field(None, description="Source URL if available")
+    source_title: Optional[str] = Field(None, description="Title of the source page/article")
+    start_index: Optional[int] = Field(None, description="Start index of citation in response text")
+    end_index: Optional[int] = Field(None, description="End index of citation in response text")
     service: LLMServiceType = Field(..., description="LLM service that provided this citation")
     
     @validator('text')
@@ -92,12 +95,21 @@ class Citation(BaseModel):
         if not v or not v.strip():
             raise ValueError('Citation text cannot be empty')
         return v.strip()
+    
+    @validator('start_index', 'end_index')
+    def validate_indices(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Index values must be non-negative')
+        return v
 
 class BrandMention(BaseModel):
     """Model for brand mentions extracted from AI responses"""
     brand_name: str = Field(..., description="Extracted brand name")
     context: str = Field(..., description="Context around the brand mention")
+    sentiment: str = Field(default="neutral", description="Sentiment classification (positive/negative/neutral)")
     sentiment_score: Optional[float] = Field(None, description="Sentiment score (-1 to 1)")
+    source_url: Optional[str] = Field(None, description="Source URL where this mention was found")
+    source_title: Optional[str] = Field(None, description="Title of the source where mention was found")
     service: LLMServiceType = Field(..., description="LLM service that provided this mention")
     
     @validator('brand_name', 'context')
@@ -106,8 +118,15 @@ class BrandMention(BaseModel):
             raise ValueError('Brand mention fields cannot be empty')
         return v.strip()
     
-    @validator('sentiment_score')
+    @validator('sentiment')
     def validate_sentiment(cls, v):
+        valid_sentiments = ['positive', 'negative', 'neutral']
+        if v not in valid_sentiments:
+            raise ValueError(f'Sentiment must be one of: {valid_sentiments}')
+        return v
+    
+    @validator('sentiment_score')
+    def validate_sentiment_score(cls, v):
         if v is not None and not (-1.0 <= v <= 1.0):
             raise ValueError('Sentiment score must be between -1.0 and 1.0')
         return v

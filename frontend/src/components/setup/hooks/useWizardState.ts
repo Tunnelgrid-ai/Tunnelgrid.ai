@@ -26,6 +26,7 @@ import {
 } from '@/services/studyService';
 
 export const useWizardState = () => {
+  const location = useLocation();
   const [currentStep, setCurrentStep] = useState<SetupStep>("brand-info");
   const [brandInfo, setBrandInfo] = useState<BrandEntity>({
     name: "",
@@ -85,6 +86,25 @@ export const useWizardState = () => {
       console.log('🔄 Restored analysis state from session storage');
     }
   }, []);
+  
+  // Clear analysis state when starting a new brand setup or when no brand is selected
+  useEffect(() => {
+    if (location.state?.selectedBrand) {
+      // Clear any existing analysis state when starting a new brand setup
+      sessionStorage.removeItem('analysisLoading');
+      sessionStorage.removeItem('analysisJobId');
+      setAnalysisLoading(false);
+      setAnalysisJobId('');
+      console.log('🧹 Cleared previous analysis state for new brand setup');
+    } else if (!location.state?.selectedBrand && !location.state?.manualSetup) {
+      // Also clear analysis state when no brand is selected (prevents lingering state)
+      sessionStorage.removeItem('analysisLoading');
+      sessionStorage.removeItem('analysisJobId');
+      setAnalysisLoading(false);
+      setAnalysisJobId('');
+      console.log('🧹 Cleared analysis state - no brand selected');
+    }
+  }, [location.state?.selectedBrand, location.state?.manualSetup]);
   
   // Save analysis state to session storage
   useEffect(() => {
@@ -163,8 +183,6 @@ export const useWizardState = () => {
     }
   };
   
-  const location = useLocation();
-
   // Initialize brand information and products if available from navigation state
   useEffect(() => {
     if (location.state?.selectedBrand) {

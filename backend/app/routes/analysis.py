@@ -428,10 +428,16 @@ async def process_analysis_job(
 
 async def process_single_query(request: AIAnalysisRequest, supabase) -> bool:
     """
-    Process a single query through AI analysis and store results
+    Process a single query through AI analysis using OpenAI Responses API and store results
+    
+    This function:
+    1. Calls the OpenAI Responses API with web search capabilities
+    2. Extracts comprehensive citations with source metadata
+    3. Identifies brand mentions with source attribution
+    4. Stores all data in the enhanced database schema
     
     Args:
-        request: AIAnalysisRequest with query details
+        request: AIAnalysisRequest with query details and persona information
         supabase: Supabase client for database operations
         
     Returns:
@@ -442,16 +448,23 @@ async def process_single_query(request: AIAnalysisRequest, supabase) -> bool:
     """
     try:
         logger.debug(f"🔍 Processing query {request.query_id}")
+        logger.debug(f"👤 Persona: {request.persona_description[:100]}...")
+        logger.debug(f"❓ Question: {request.question_text}")
         
-        # Analyze with OpenAI
+        # Analyze with OpenAI using Responses API
         analysis_result = await openai_service.analyze_brand_perception(request)
+        
+        logger.info(f"✅ Analysis completed for query {request.query_id}")
+        logger.info(f"📊 Results: {len(analysis_result.citations)} citations, {len(analysis_result.brand_mentions)} brand mentions")
         
         # Store response in database
         response_data = {
             "response_id": str(uuid.uuid4()),
             "query_id": request.query_id,
             "model": request.model,
-            "response_text": analysis_result.response_text
+            "response_text": analysis_result.response_text,
+            "processing_time_ms": analysis_result.processing_time_ms,
+            "token_usage": analysis_result.token_usage
         }
         
         response_result = supabase.table("responses").insert(response_data).execute()
@@ -460,43 +473,57 @@ async def process_single_query(request: AIAnalysisRequest, supabase) -> bool:
             raise Exception(f"Failed to store response: {response_result.error}")
         
         response_id = response_result.data[0]["response_id"]
+        logger.debug(f"💾 Stored response with ID: {response_id}")
         
-        # Store citations if any
+        # Store enhanced citations with full metadata
         if analysis_result.citations:
             citations_data = []
             for citation in analysis_result.citations:
-                citations_data.append({
+                citation_data = {
                     "citation_id": str(uuid.uuid4()),
                     "response_id": response_id,
                     "citation_text": citation.text,
-                    "source_url": citation.source_url
-                })
+                    "source_url": citation.source_url,
+                    "source_title": citation.source_title,
+                    "start_index": citation.start_index,
+                    "end_index": citation.end_index
+                }
+                citations_data.append(citation_data)
             
             citations_result = supabase.table("citations").insert(citations_data).execute()
             
             if hasattr(citations_result, 'error') and citations_result.error:
                 logger.warning(f"⚠️ Failed to store citations for {request.query_id}: {citations_result.error}")
+            else:
+                logger.debug(f"💾 Stored {len(citations_data)} citations")
         
-        # Store brand mentions if any
+        # Store enhanced brand mentions with source attribution
         if analysis_result.brand_mentions:
             mentions_data = []
             for mention in analysis_result.brand_mentions:
-                mentions_data.append({
+                mention_data = {
                     "mention_id": str(uuid.uuid4()),
                     "response_id": response_id,
                     "brand_name": mention.brand_name,
                     "mention_context": mention.context,
-                    "sentiment_score": mention.sentiment_score
-                })
+                    "sentiment": mention.sentiment,
+                    "sentiment_score": mention.sentiment_score,
+                    "source_url": mention.source_url,
+                    "source_title": mention.source_title
+                }
+                mentions_data.append(mention_data)
             
             mentions_result = supabase.table("brand_mentions").insert(mentions_data).execute()
             
             if hasattr(mentions_result, 'error') and mentions_result.error:
                 logger.warning(f"⚠️ Failed to store brand mentions for {request.query_id}: {mentions_result.error}")
+            else:
+                logger.debug(f"💾 Stored {len(mentions_data)} brand mentions")
         
-        logger.debug(f"✅ Successfully processed query {request.query_id}")
+        logger.info(f"✅ Successfully processed and stored results for query {request.query_id}")
         return True
         
     except Exception as e:
         logger.error(f"❌ Error processing query {request.query_id}: {e}")
+        logger.error(f"❌ Error details: {str(e)}")
         raise e 
