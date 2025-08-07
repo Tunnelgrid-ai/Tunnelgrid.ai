@@ -12,6 +12,7 @@ import { BrandReachCard } from "@/components/report/BrandReachCard";
 import { TopicVisibilityMatrix } from "@/components/report/TopicVisibilityMatrix";
 import { ModelVisibilityCard } from "@/components/report/ModelVisibilityCard";
 import { SourcesCard } from "@/components/report/SourcesCard";
+import { StrategicRecommendationsCard } from "@/components/report/StrategicRecommendationsCard";
 import { getComprehensiveReport } from "@/services/analysisService";
 
 // Types for the comprehensive report data
@@ -68,6 +69,35 @@ interface ComprehensiveReportData {
       category: string;
       count: number;
     }[];
+  };
+  strategicRecommendations: {
+    opportunityGaps: {
+      personaName: string;
+      topicName: string;
+      currentScore: number;
+      potentialScore: number;
+      impact: 'High' | 'Medium' | 'Low';
+      effort: 'High' | 'Medium' | 'Low';
+      priority: number;
+    }[];
+    contentStrategy: {
+      topicName: string;
+      currentVisibility: number;
+      competitorMentions: number;
+      recommendedAction: string;
+      targetIncrease: number;
+    }[];
+    competitiveInsights: {
+      competitorName: string;
+      mentionCount: number;
+      strongestTopics: string[];
+      opportunityAreas: string[];
+    }[];
+    overallScore: {
+      current: number;
+      potential: number;
+    };
+    keyRecommendations: string[];
   };
 }
 
@@ -169,6 +199,13 @@ const mockReportData: ComprehensiveReportData = {
       { category: "E-commerce Sites", count: 44 },
       { category: "Forums/Community Sites", count: 44 },
     ],
+  },
+  strategicRecommendations: {
+    opportunityGaps: [],
+    contentStrategy: [],
+    competitiveInsights: [],
+    overallScore: { current: 0, potential: 0 },
+    keyRecommendations: [],
   },
 };
 
@@ -392,6 +429,14 @@ export const ComprehensiveReportPage = () => {
               data={reportData.sources}
               onSourceClick={(source) => handleViewDetails(`source-${source.domain}`)}
               onSourceTypeClick={(sourceType) => handleViewDetails(`source-type-${sourceType.category}`)}
+            />
+          )}
+
+          {/* Strategic Recommendations - Only show if data exists */}
+          {reportData.strategicRecommendations.keyRecommendations.length > 0 && (
+            <StrategicRecommendationsCard 
+              data={reportData.strategicRecommendations}
+              onRecommendationClick={(recommendation) => handleViewDetails(`recommendation-${recommendation}`)}
             />
           )}
 
