@@ -184,6 +184,9 @@ class AnalysisResults(BaseModel):
     responses: List[Dict[str, Any]] = Field(default=[], description="List of AI responses with query details")
     citations: List[Dict[str, Any]] = Field(default=[], description="List of extracted citations")
     brand_mentions: List[Dict[str, Any]] = Field(default=[], description="List of brand mentions with sentiment")
+    personas: List[Dict[str, Any]] = Field(default=[], description="List of personas for the audit")
+    topics: List[Dict[str, Any]] = Field(default=[], description="List of topics for the audit")
+    queries: List[Dict[str, Any]] = Field(default=[], description="List of queries that were analyzed")
     service_summary: Dict[LLMServiceType, Dict[str, Any]] = Field(default={}, description="Summary by service")
     
     @validator('total_responses', 'total_citations', 'total_brand_mentions')

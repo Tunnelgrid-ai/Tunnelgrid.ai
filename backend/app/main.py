@@ -45,6 +45,7 @@ from .routes.personas import router as personas_router
 from .routes.questions import router as questions_router
 from .routes.analysis import router as analysis_router
 from .routes.studies import router as studies_router
+from .routes.strategic import router as strategic_router
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -172,6 +173,8 @@ app.include_router(
     tags=["studies"]
 )
 
+app.include_router(strategic_router)
+
 # ROOT ENDPOINT
 @app.get("/")
 async def root():
@@ -192,7 +195,8 @@ async def root():
             "personas": "/api/personas",
             "questions": "/api/questions",
             "analysis": "/api/analysis",
-            "studies": "/api/studies"
+            "studies": "/api/studies",
+            "strategic": "/api/strategic"
         }
     }
 
