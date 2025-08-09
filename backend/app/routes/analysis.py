@@ -263,11 +263,18 @@ async def get_analysis_results(audit_id: str):
                 detail=f"Analysis not completed. Current status: {job['status']}"
             )
         
-        # Get all responses for this audit
-        responses_result = supabase.table("responses").select("""
-            *,
-            queries!inner(audit_id, persona, query_text)
-        """).eq("queries.audit_id", validated_audit_id).execute()
+        # Get all responses for this audit (first get queries, then join responses)
+        queries_result = supabase.table("queries").select("*").eq("audit_id", validated_audit_id).execute()
+        
+        if not queries_result.data:
+            raise HTTPException(status_code=404, detail="No queries found for this audit")
+        
+        query_ids = [q["query_id"] for q in queries_result.data]
+        responses_result = supabase.table("responses").select("*").in_("query_id", query_ids).execute()
+        
+        # Get personas and topics for brand reach analysis
+        personas_result = supabase.table("personas").select("*").eq("audit_id", validated_audit_id).execute()
+        topics_result = supabase.table("topics").select("*").eq("audit_id", validated_audit_id).execute()
         
         # Get citations
         response_ids = [r["response_id"] for r in responses_result.data]
@@ -284,9 +291,11 @@ async def get_analysis_results(audit_id: str):
             "total_brand_mentions": len(mentions_result.data),
             "responses": responses_result.data,
             "citations": citations_result.data,
-            "brand_mentions": mentions_result.data
+            "brand_mentions": mentions_result.data,
+            "personas": personas_result.data,
+            "topics": topics_result.data,
+            "queries": queries_result.data
         }
-        
         logger.info(f"📋 Retrieved results for audit {validated_audit_id}: {len(responses_result.data)} responses")
         
         return results

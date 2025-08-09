@@ -94,3 +94,7 @@ playwright/.cache/
 *.njsproj
 *.sln
 *.sw? 
+
+# Python byte-code
+**/__pycache__/
+*.py[cod]
