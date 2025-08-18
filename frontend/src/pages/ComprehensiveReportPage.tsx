@@ -4,13 +4,14 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, Share2, ArrowLeft, ExternalLink } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Filter } from "lucide-react";
 
 // Import report components
 import { BrandVisibilityCard } from "@/components/report/BrandVisibilityCard";
 import { BrandReachCard } from "@/components/report/BrandReachCard";
 import { TopicVisibilityMatrix } from "@/components/report/TopicVisibilityMatrix";
-import { ModelVisibilityCard } from "@/components/report/ModelVisibilityCard";
+
 import { SourcesCard } from "@/components/report/SourcesCard";
 import { StrategicRecommendationsCard } from "@/components/report/StrategicRecommendationsCard";
 import { getComprehensiveReport } from "@/services/analysisService";
@@ -27,11 +28,11 @@ interface ComprehensiveReportData {
   };
   brandVisibility: {
     percentage: number;
-    platforms: {
+    brandRankings: {
       name: string;
-      url: string;
       mentions: number;
       visibility: number;
+      isTargetBrand: boolean;
     }[];
     totalPrompts: number;
     totalAppearances: number;
@@ -55,11 +56,7 @@ interface ComprehensiveReportData {
       score: number;
     }[];
   };
-  modelVisibility: {
-    name: string;
-    visibility: number;
-    logo?: string;
-  }[];
+
   sources: {
     topSources: {
       domain: string;
@@ -111,16 +108,16 @@ const mockReportData: ComprehensiveReportData = {
     totalResponses: 1843,
   },
   brandVisibility: {
-    percentage: 33,
-    platforms: [
-      { name: "Apple", url: "apple.com", mentions: 258, visibility: 70 },
-      { name: "Spotify", url: "spotify.com", mentions: 287, visibility: 72 },
-      { name: "Amazon", url: "amazon.com", mentions: 220, visibility: 58 },
-      { name: "eBay", url: "ebay.com", mentions: 208, visibility: 52 },
-      { name: "YouTube", url: "youtube.com", mentions: 133, visibility: 33 },
+    percentage: 53,
+    brandRankings: [
+      { name: "Haldiram's", mentions: 36, visibility: 53, isTargetBrand: true },
+      { name: "Bikano", mentions: 18, visibility: 26, isTargetBrand: false },
+      { name: "Aakash Namkeen", mentions: 12, visibility: 18, isTargetBrand: false },
+      { name: "Frito-Lay", mentions: 8, visibility: 12, isTargetBrand: false },
+      { name: "Amazon", mentions: 6, visibility: 9, isTargetBrand: false },
     ],
-    totalPrompts: 60,
-    totalAppearances: 33,
+    totalPrompts: 68,
+    totalAppearances: 53,
   },
   brandReach: {
     personasVisibility: [
@@ -167,13 +164,7 @@ const mockReportData: ComprehensiveReportData = {
       { personaName: "Multi-tasking Commuter", topicName: "How to Switch", score: 20 },
     ],
   },
-  modelVisibility: [
-    { name: "Google Gemini 1.5 Flash", visibility: 59 },
-    { name: "Anthropic Claude", visibility: 30 },
-    { name: "OpenAI o1", visibility: 29 },
-    { name: "OpenAI o1-Mini", visibility: 28 },
-    { name: "Perplexity AI Sonar", visibility: 31 },
-  ],
+
   sources: {
     topSources: [
       { domain: "youtube.com", count: 42 },
@@ -214,9 +205,11 @@ export const ComprehensiveReportPage = () => {
   const navigate = useNavigate();
   const [reportData, setReportData] = useState<ComprehensiveReportData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedModels, setSelectedModels] = useState<string[]>(['all']); // Multi-select model filter
 
   // Check if this is a demo route
-  const isDemoRoute = window.location.pathname === '/demo/report';
+  const isDemoRoute = window.location.pathname === '/demo/report' || reportId === 'demo';
 
   useEffect(() => {
     const loadReportData = async () => {
@@ -274,15 +267,7 @@ export const ComprehensiveReportPage = () => {
     loadReportData();
   }, [reportId]);
 
-  const handleExportReport = () => {
-    // Implement export functionality
-    console.log("Exporting report...");
-  };
 
-  const handleShareReport = () => {
-    // Implement share functionality
-    console.log("Sharing report...");
-  };
 
   const handleViewDetails = (section: string) => {
     // Navigate to detailed view
@@ -363,31 +348,30 @@ export const ComprehensiveReportPage = () => {
             </div>
           </div>
           
-          <div className="flex space-x-2">
-            <Button 
-              variant="outline" 
-              onClick={handleShareReport}
-              className="flex items-center space-x-2"
-            >
-              <Share2 className="w-4 h-4" />
-              <span>Share</span>
-            </Button>
-            <Button 
-              onClick={handleExportReport}
-              className="flex items-center space-x-2"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export</span>
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => window.open('#', '_blank')}
-              className="flex items-center space-x-2"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Copy Report Link</span>
-            </Button>
+
+        </div>
+
+        {/* Model Filter - Compact */}
+        <div className="flex items-center justify-between bg-muted/10 rounded-md px-3 py-2 border">
+          <div className="flex items-center space-x-2">
+            <Filter className="w-3 h-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Model:</span>
+            <Select value={selectedModels[0]} onValueChange={(value) => setSelectedModels([value])}>
+              <SelectTrigger className="w-32 h-7 text-xs">
+                <SelectValue placeholder="Select..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Models</SelectItem>
+                <SelectItem value="openai">OpenAI</SelectItem>
+                <SelectItem value="perplexity">Perplexity</SelectItem>
+                <SelectItem value="claude">Claude</SelectItem>
+                <SelectItem value="gemini">Gemini</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+          <span className="text-xs text-muted-foreground">
+            {selectedModels[0] === 'all' ? 'All models' : selectedModels[0]}
+          </span>
         </div>
 
         {/* Report Sections */}
@@ -399,7 +383,7 @@ export const ComprehensiveReportPage = () => {
           />
 
           {/* Brand Reach - Only show if data exists */}
-          {(reportData.brandReach.personasVisibility.length > 0 || reportData.brandReach.topicsVisibility.length > 0) && (
+          {(reportData.brandReach?.personasVisibility?.length > 0 || reportData.brandReach?.topicsVisibility?.length > 0) && (
             <BrandReachCard 
               data={reportData.brandReach}
               onPersonaClick={(persona) => handleViewDetails(`persona-${persona.name}`)}
@@ -408,23 +392,17 @@ export const ComprehensiveReportPage = () => {
           )}
 
           {/* Topic Visibility Matrix - Only show if data exists */}
-          {reportData.topicMatrix.matrix.length > 0 && (
+          {reportData.topicMatrix?.matrix?.length > 0 && (
             <TopicVisibilityMatrix 
               data={reportData.topicMatrix}
               onCellClick={(cell) => handleViewDetails(`matrix-${cell.personaName}-${cell.topicName}`)}
             />
           )}
 
-          {/* Model Visibility - Only show if data exists */}
-          {reportData.modelVisibility.length > 0 && (
-            <ModelVisibilityCard 
-              data={reportData.modelVisibility}
-              onModelClick={(model) => handleViewDetails(`model-${model.name}`)}
-            />
-          )}
+          {/* Model Visibility Card removed - replaced with filter above */}
 
           {/* Sources - Only show if data exists */}
-          {(reportData.sources.topSources.length > 0 || reportData.sources.sourceTypes.length > 0) && (
+          {(reportData.sources?.topSources?.length > 0 || reportData.sources?.sourceTypes?.length > 0) && (
             <SourcesCard 
               data={reportData.sources}
               onSourceClick={(source) => handleViewDetails(`source-${source.domain}`)}
@@ -433,7 +411,7 @@ export const ComprehensiveReportPage = () => {
           )}
 
           {/* Strategic Recommendations - Only show if data exists */}
-          {reportData.strategicRecommendations.keyRecommendations.length > 0 && (
+          {reportData.strategicRecommendations?.keyRecommendations?.length > 0 && (
             <StrategicRecommendationsCard 
               data={reportData.strategicRecommendations}
               onRecommendationClick={(recommendation) => handleViewDetails(`recommendation-${recommendation}`)}

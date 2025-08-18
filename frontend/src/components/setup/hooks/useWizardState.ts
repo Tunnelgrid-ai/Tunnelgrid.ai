@@ -78,11 +78,17 @@ export const useWizardState = () => {
   useEffect(() => {
     const savedJobId = sessionStorage.getItem('analysisJobId');
     const savedLoading = sessionStorage.getItem('analysisLoading');
+    const savedAuditId = sessionStorage.getItem('auditId');
     
     if (savedJobId && savedLoading === 'true') {
       setAnalysisJobId(savedJobId);
       setAnalysisLoading(true);
       console.log('🔄 Restored analysis state from session storage');
+    }
+    
+    if (savedAuditId) {
+      setAuditId(savedAuditId);
+      console.log('🔄 Restored audit ID from session storage:', savedAuditId);
     }
   }, []);
   
@@ -96,6 +102,16 @@ export const useWizardState = () => {
       sessionStorage.removeItem('analysisJobId');
     }
   }, [analysisLoading, analysisJobId]);
+  
+  // Save audit ID to session storage
+  useEffect(() => {
+    if (auditId) {
+      sessionStorage.setItem('auditId', auditId);
+      console.log('💾 Saved audit ID to session storage:', auditId);
+    } else {
+      sessionStorage.removeItem('auditId');
+    }
+  }, [auditId]);
 
   // Add study state to the hook
   const [currentStudy, setCurrentStudy] = useState<Study | null>(null);
@@ -210,6 +226,8 @@ export const useWizardState = () => {
    */
   const handleAuditCreated = (createdAuditId: string) => {
     console.log('🎉 Audit created successfully in wizard:', createdAuditId);
+    
+    // Use the actual created audit ID
     setAuditId(createdAuditId);
     
     // Automatically proceed to Topics step

@@ -10,6 +10,7 @@ import { WizardProgress } from "./components/WizardProgress";
 import { useWizardState } from "./hooks/useWizardState";
 import type { Product, BrandEntity } from "@/types/brandTypes";
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 interface BrandSetupWizardProps {
   brand: BrandEntity;
@@ -22,6 +23,7 @@ export const BrandSetupWizard = ({
   brandDescription,
   studyId
 }: BrandSetupWizardProps) => {
+  const navigate = useNavigate();
   const {
     currentStep,
     setCurrentStep,
@@ -90,16 +92,38 @@ export const BrandSetupWizard = ({
         onComplete={(results) => {
           console.log('✅ Analysis completed:', results);
           setAnalysisLoading(false);
-          // TODO: Navigate to results page
-          // navigate(`/results/${auditId}`);
+          
+          // Clean up session storage
+          sessionStorage.removeItem('analysisLoading');
+          sessionStorage.removeItem('analysisJobId');
+          sessionStorage.removeItem('auditId');
+          
+          // Navigate to comprehensive report page using audit_id from results
+          const completedAuditId = results.audit_id || auditId;
+          if (completedAuditId) {
+            console.log('🚀 Redirecting to comprehensive report:', `/reports/${completedAuditId}`);
+            navigate(`/reports/${completedAuditId}`);
+          } else {
+            console.error('❌ No auditId available for redirect');
+          }
         }}
         onError={(error) => {
           console.error('❌ Analysis failed:', error);
           setAnalysisLoading(false);
+          
+          // Clean up session storage
+          sessionStorage.removeItem('analysisLoading');
+          sessionStorage.removeItem('analysisJobId');
+          sessionStorage.removeItem('auditId');
         }}
         onCancel={() => {
           console.log('🚫 Analysis cancelled by user');
           setAnalysisLoading(false);
+          
+          // Clean up session storage
+          sessionStorage.removeItem('analysisLoading');
+          sessionStorage.removeItem('analysisJobId');
+          sessionStorage.removeItem('auditId');
         }}
       />
     );

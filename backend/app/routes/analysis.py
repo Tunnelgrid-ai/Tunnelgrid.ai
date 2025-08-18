@@ -22,7 +22,7 @@ import asyncio
 import uuid
 import time
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Path
@@ -276,22 +276,26 @@ async def get_analysis_results(audit_id: str):
         personas_result = supabase.table("personas").select("*").eq("audit_id", validated_audit_id).execute()
         topics_result = supabase.table("topics").select("*").eq("audit_id", validated_audit_id).execute()
         
-        # Get citations
+        # Get brand extractions (NEW approach - replaces citations and brand_mentions)
         response_ids = [r["response_id"] for r in responses_result.data]
-        citations_result = supabase.table("citations").select("*").in_("response_id", response_ids).execute()
+        brand_extractions_result = supabase.table("brand_extractions").select("*").in_("response_id", response_ids).execute()
         
-        # Get brand mentions
-        mentions_result = supabase.table("brand_mentions").select("*").in_("response_id", response_ids).execute()
+        # Keep citations for backwards compatibility (but it might be empty)
+        try:
+            citations_result = supabase.table("citations").select("*").in_("response_id", response_ids).execute()
+        except:
+            citations_result = type('obj', (object,), {'data': []})()  # Empty fallback if table doesn't exist
         
-        # Organize results
+        # Organize results with new brand_extractions data
         results = {
             "job_status": job,
             "total_responses": len(responses_result.data),
             "total_citations": len(citations_result.data),
-            "total_brand_mentions": len(mentions_result.data),
+            "total_brand_mentions": len(brand_extractions_result.data),  # Use brand_extractions count
             "responses": responses_result.data,
-            "citations": citations_result.data,
-            "brand_mentions": mentions_result.data,
+            "citations": citations_result.data,  # Keep for compatibility
+            "brand_mentions": brand_extractions_result.data,  # NEW: Use brand_extractions as brand mentions
+            "brand_extractions": brand_extractions_result.data,  # NEW: Include raw brand extractions
             "personas": personas_result.data,
             "topics": topics_result.data,
             "queries": queries_result.data
@@ -305,6 +309,179 @@ async def get_analysis_results(audit_id: str):
     except Exception as e:
         logger.error(f"❌ Error getting results: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get results: {str(e)}")
+
+@router.get("/comprehensive-report/{audit_id}")
+async def get_comprehensive_report(audit_id: str):
+    """
+    Get comprehensive report metrics for a completed audit
+    
+    This endpoint uses pre-calculated metrics from the cache table for optimal performance.
+    If cache is invalid or missing, it will trigger a recalculation.
+    """
+    try:
+        logger.info(f"📊 Getting comprehensive report for audit: {audit_id}")
+        
+        # Validate UUID format
+        validated_audit_id = validate_uuid(audit_id, "audit_id")
+        
+        supabase = get_supabase_client()
+        
+        # Step 1: Check if audit exists and analysis is completed
+        audit_result = supabase.table("audit").select("*").eq("audit_id", validated_audit_id).execute()
+        if not audit_result.data:
+            raise HTTPException(status_code=404, detail="Audit not found")
+        
+        audit = audit_result.data[0]
+        
+        # Check if analysis is completed
+        job_result = supabase.table("analysis_jobs").select("*").eq("audit_id", validated_audit_id).execute()
+        if not job_result.data:
+            raise HTTPException(status_code=404, detail="Analysis job not found")
+        
+        job = job_result.data[0]
+        if job["status"] not in [AnalysisJobStatus.COMPLETED.value, AnalysisJobStatus.PARTIAL_FAILURE.value]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Analysis not completed. Current status: {job['status']}"
+            )
+        
+        # Step 2: Check cache for pre-calculated metrics
+        cache_result = supabase.table("comprehensive_metrics_cache").select("*").eq("audit_id", validated_audit_id).execute()
+        
+        cache_data = None
+        if cache_result.data:
+            cache_data = cache_result.data[0]
+            logger.info(f"📋 Found cached metrics for audit {validated_audit_id}")
+        
+        # Step 3: If cache is invalid or missing, trigger recalculation
+        if not cache_data or not cache_data.get("is_valid", False):
+            logger.info(f"🔄 Cache invalid or missing, triggering recalculation for audit {validated_audit_id}")
+            
+            try:
+                # Call the PostgreSQL function to calculate and cache metrics
+                recalculation_result = supabase.rpc(
+                    "calculate_comprehensive_metrics", 
+                    {"p_audit_id": validated_audit_id}
+                ).execute()
+                
+                # Fetch the updated cache
+                cache_result = supabase.table("comprehensive_metrics_cache").select("*").eq("audit_id", validated_audit_id).execute()
+                if cache_result.data:
+                    cache_data = cache_result.data[0]
+                    logger.info(f"✅ Metrics recalculated and cached for audit {validated_audit_id}")
+                else:
+                    raise Exception("Failed to retrieve recalculated metrics")
+                    
+            except Exception as calc_error:
+                logger.error(f"❌ Failed to recalculate metrics: {calc_error}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Failed to calculate comprehensive metrics: {str(calc_error)}"
+                )
+        
+        # Step 4: Get brand information for the report
+        brand_result = supabase.table("brand").select("*").eq("brand_id", audit["brand_id"]).execute()
+        brand = brand_result.data[0] if brand_result.data else {}
+        
+        # Step 5: Compile comprehensive report from cached data
+        comprehensive_report = {
+            "audit_info": {
+                "audit_id": validated_audit_id,
+                "brand_name": brand.get("brand_name", "Unknown"),
+                "brand_domain": brand.get("domain"),
+                "total_queries": cache_data["total_queries"],
+                "total_responses": cache_data["total_responses"],
+                "analysis_date": cache_data["analysis_completed_at"]
+            },
+            "brand_visibility": {
+                "overall_percentage": float(cache_data["overall_visibility_percentage"]),
+                "total_brand_mentions": cache_data["target_brand_mentions"],
+                "sentiment_distribution": cache_data["sentiment_distribution"],
+                "platform_rankings": cache_data["platform_rankings"]
+            },
+            "competitor_analysis": {
+                "total_competitors": len(cache_data["competitor_analysis"]),
+                "competitor_brands": cache_data["competitor_analysis"]
+            },
+            "brand_reach": {
+                "persona_visibility": cache_data["persona_visibility"],
+                "topic_visibility": cache_data["topic_visibility"],
+                "persona_topic_matrix": cache_data["persona_topic_matrix"]
+            },
+            "model_performance": cache_data["model_performance"],
+            "strategic_insights": {
+                "opportunity_gaps": cache_data["opportunity_gaps"],
+                "content_strategy": cache_data["content_strategy"],
+                "competitive_insights": cache_data["competitive_insights"]
+            },
+            "cache_info": {
+                "cache_id": cache_data["cache_id"],
+                "cache_version": cache_data["cache_version"],
+                "created_at": cache_data["created_at"],
+                "updated_at": cache_data["updated_at"],
+                "is_valid": cache_data["is_valid"]
+            }
+        }
+        
+        logger.info(f"✅ Comprehensive report generated from cache for audit {validated_audit_id}")
+        logger.info(f"📊 Metrics: {cache_data['overall_visibility_percentage']}% visibility, {len(cache_data['competitor_analysis'])} competitors")
+        
+        return comprehensive_report
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error generating comprehensive report: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate comprehensive report: {str(e)}")
+
+@router.post("/comprehensive-report/{audit_id}/recalculate")
+async def recalculate_comprehensive_report(audit_id: str):
+    """
+    Force recalculation of comprehensive report metrics
+    
+    This endpoint manually triggers recalculation of cached metrics.
+    Useful when you want to refresh the cache without waiting for data changes.
+    """
+    try:
+        logger.info(f"🔄 Force recalculating comprehensive report for audit: {audit_id}")
+        
+        # Validate UUID format
+        validated_audit_id = validate_uuid(audit_id, "audit_id")
+        
+        supabase = get_supabase_client()
+        
+        # Check if audit exists
+        audit_result = supabase.table("audit").select("*").eq("audit_id", validated_audit_id).execute()
+        if not audit_result.data:
+            raise HTTPException(status_code=404, detail="Audit not found")
+        
+        # Trigger recalculation
+        try:
+            recalculation_result = supabase.rpc(
+                "calculate_comprehensive_metrics", 
+                {"p_audit_id": validated_audit_id}
+            ).execute()
+            
+            logger.info(f"✅ Metrics recalculated for audit {validated_audit_id}")
+            
+            return {
+                "success": True,
+                "message": "Comprehensive metrics recalculated successfully",
+                "audit_id": validated_audit_id
+            }
+            
+        except Exception as calc_error:
+            logger.error(f"❌ Failed to recalculate metrics: {calc_error}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Failed to recalculate comprehensive metrics: {str(calc_error)}"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error recalculating comprehensive report: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to recalculate comprehensive report: {str(e)}")
 
 async def process_analysis_job(
     job_id: str, 
@@ -356,9 +533,10 @@ async def process_analysis_job(
                 # Create analysis request
                 analysis_request = AIAnalysisRequest(
                     query_id=query["query_id"],
+                    audit_id=audit_id,  # NEW: Pass audit_id to the request
                     persona_description=persona["persona_description"],
                     question_text=query["query_text"],
-                    model="openai-4o",
+                    model="gpt-4o",
                     service=LLMServiceType.OPENAI
                 )
                 
@@ -423,6 +601,16 @@ async def process_analysis_job(
             "error_message": f"{failed} queries failed" if failed > 0 else None
         }).eq("job_id", job_id).execute()
         
+        # Step 7: Calculate comprehensive metrics if analysis completed successfully
+        if final_status == AnalysisJobStatus.COMPLETED.value:
+            try:
+                logger.info(f"📊 Calculating comprehensive metrics for audit {audit_id}")
+                supabase.rpc("calculate_comprehensive_metrics", {"p_audit_id": audit_id}).execute()
+                logger.info(f"✅ Comprehensive metrics calculated and cached for audit {audit_id}")
+            except Exception as metrics_error:
+                logger.warning(f"⚠️ Failed to calculate comprehensive metrics: {metrics_error}")
+                # Don't fail the entire job if metrics calculation fails
+        
         logger.info(f"🏁 Job {job_id} finished: {completed} completed, {failed} failed")
         
     except Exception as e:
@@ -437,23 +625,32 @@ async def process_analysis_job(
 
 async def process_single_query(request: AIAnalysisRequest, supabase) -> bool:
     """
-    Process a single query through AI analysis and store results
-    
-    Args:
-        request: AIAnalysisRequest with query details
-        supabase: Supabase client for database operations
-        
-    Returns:
-        bool: True if successful, False otherwise
-        
-    Raises:
-        Exception: If processing fails
+    Process a single query through two-stage AI analysis and store all results
     """
     try:
         logger.debug(f"🔍 Processing query {request.query_id}")
         
-        # Analyze with OpenAI
-        analysis_result = await openai_service.analyze_brand_perception(request)
+        # Get audit brand name and brand_id for brand extraction
+        audit_brand_name = None
+        brand_id = None
+        try:
+            # Get brand name from audit table
+            audit_query = supabase.table("audit").select("brand_id").eq("audit_id", request.audit_id).execute()
+            if audit_query.data:
+                brand_id = audit_query.data[0]["brand_id"] 
+                brand_query = supabase.table("brand").select("brand_name").eq("brand_id", brand_id).execute()
+                if brand_query.data:
+                    audit_brand_name = brand_query.data[0]["brand_name"]
+                    logger.info(f"🎯 Target brand for analysis: {audit_brand_name}")
+                else:
+                    logger.warning(f"⚠️ No brand found for brand_id: {brand_id}")
+            else:
+                logger.warning(f"⚠️ No audit found for audit_id: {request.audit_id}")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not retrieve audit brand name: {str(e)}")
+        
+        # Two-stage AI analysis 
+        analysis_result = await openai_service.analyze_brand_perception(request, audit_brand_name)
         
         # Store response in database
         response_data = {
@@ -470,42 +667,44 @@ async def process_single_query(request: AIAnalysisRequest, supabase) -> bool:
         
         response_id = response_result.data[0]["response_id"]
         
-        # Store citations if any
-        if analysis_result.citations:
-            citations_data = []
-            for citation in analysis_result.citations:
-                citations_data.append({
-                    "citation_id": str(uuid.uuid4()),
+        # Citations are now handled through brand_extractions with source information
+        # No need for separate citations table since we extract source info with brands
+        # Store brand extractions (NEW)
+        if analysis_result.brand_extractions:
+            brand_extractions_data = []
+            for extraction in analysis_result.brand_extractions:
+                brand_extractions_data.append({
+                    "extraction_id": str(uuid.uuid4()),
                     "response_id": response_id,
-                    "citation_text": citation.text,
-                    "source_url": citation.source_url
+                    "query_id": request.query_id,
+                    "brand_id": brand_id if extraction.is_target_brand else None,
+                    "is_target_brand": extraction.is_target_brand,
+                    "source_domain": extraction.source_domain,
+                    "source_url": extraction.source_url,
+                    "article_title": extraction.article_title,
+                    "extracted_brand_name": extraction.extracted_brand_name,
+                    "context_snippet": extraction.context_snippet,
+                    "mention_position": extraction.mention_position,
+                    "sentiment_label": extraction.sentiment_label,
+                    "source_category": extraction.source_category
                 })
             
-            citations_result = supabase.table("citations").insert(citations_data).execute()
-            
-            if hasattr(citations_result, 'error') and citations_result.error:
-                logger.warning(f"⚠️ Failed to store citations for {request.query_id}: {citations_result.error}")
+            try:
+                supabase.table("brand_extractions").insert(brand_extractions_data).execute()
+                logger.info(f"✅ Stored {len(brand_extractions_data)} brand extractions for query {request.query_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to store brand extractions: {str(e)}")
+                # This makes it a partial failure since extraction data is critical
+                raise Exception(f"Brand extraction storage failed: {str(e)}")
         
-        # Store brand mentions if any
-        if analysis_result.brand_mentions:
-            mentions_data = []
-            for mention in analysis_result.brand_mentions:
-                mentions_data.append({
-                    "mention_id": str(uuid.uuid4()),
-                    "response_id": response_id,
-                    "brand_name": mention.brand_name,
-                    "mention_context": mention.context,
-                    "sentiment_score": mention.sentiment_score
-                })
-            
-            mentions_result = supabase.table("brand_mentions").insert(mentions_data).execute()
-            
-            if hasattr(mentions_result, 'error') and mentions_result.error:
-                logger.warning(f"⚠️ Failed to store brand mentions for {request.query_id}: {mentions_result.error}")
+        # Check for extraction errors (log but don't fail the whole process)
+        if analysis_result.extraction_error:
+            logger.warning(f"⚠️ Brand extraction failed for query {request.query_id}: {analysis_result.extraction_error}")
+            # Don't raise exception - let the main analysis succeed even if brand extraction fails
         
-        logger.debug(f"✅ Successfully processed query {request.query_id}")
+        logger.info(f"✅ Successfully processed query {request.query_id} with {len(analysis_result.brand_extractions)} brand extractions")
         return True
         
     except Exception as e:
-        logger.error(f"❌ Error processing query {request.query_id}: {e}")
-        raise e 
+        logger.error(f"❌ Failed to process query {request.query_id}: {str(e)}")
+        raise 

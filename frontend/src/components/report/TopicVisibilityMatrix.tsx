@@ -53,87 +53,103 @@ export const TopicVisibilityMatrix = ({ data, onCellClick }: TopicVisibilityMatr
         </p>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
-          <div className="min-w-full">
-            {/* Header with topics */}
-            <div className="grid grid-cols-[200px_1fr] gap-4 mb-4">
-              <div></div> {/* Empty cell for persona column */}
-              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${data.topics.length}, minmax(120px, 1fr))` }}>
-                {data.topics.map((topic) => (
-                  <div 
-                    key={topic}
-                    className="text-xs font-medium text-center p-2 bg-muted/20 rounded-lg transform -rotate-12 origin-center"
-                    style={{ minHeight: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <span className="transform rotate-12">{topic}</span>
+        <div className="relative">
+          <div className="flex border border-border rounded-lg overflow-hidden">
+            {/* Fixed Persona Column */}
+            <div className="flex-shrink-0 bg-background border-r border-border">
+              {/* Persona Column Header */}
+              <div className="h-16 p-3 bg-muted/20 border-b border-border flex items-center justify-center">
+                <span className="text-xs font-medium text-muted-foreground">Personas</span>
+              </div>
+              
+              {/* Persona Names */}
+              <div className="min-h-0">
+                {data.personas.map((persona) => (
+                  <div key={persona} className="h-14 p-2 border-b border-border/50 flex items-center justify-end">
+                    <Badge variant="outline" className="text-xs font-medium max-w-[180px] truncate">
+                      {persona}
+                    </Badge>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Matrix rows */}
-            <div className="space-y-2">
-              {data.personas.map((persona) => (
-                <div key={persona} className="grid grid-cols-[200px_1fr] gap-4">
-                  {/* Persona name */}
-                  <div className="flex items-center justify-end pr-4">
-                    <Badge variant="outline" className="text-xs font-medium">
-                      {persona}
-                    </Badge>
-                  </div>
-                  
-                  {/* Score cells */}
-                  <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${data.topics.length}, minmax(120px, 1fr))` }}>
-                    {data.topics.map((topic) => {
-                      const score = getScoreForCell(persona, topic);
-                      const cellData = getCellData(persona, topic);
-                      
-                      return (
-                        <div
-                          key={`${persona}-${topic}`}
-                          className={`
-                            h-12 rounded-lg border border-border flex items-center justify-center
-                            cursor-pointer transition-all duration-200 hover:scale-105 hover:border-primary
-                            ${getScoreColor(score)} ${getScoreOpacity(score)}
-                          `}
-                          onClick={() => cellData && onCellClick?.(cellData)}
-                          title={`${persona} × ${topic}: ${score}%`}
-                        >
-                          <span className="text-sm font-bold text-white drop-shadow-sm">
-                            {score > 0 ? score : "—"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+            {/* Scrollable Topics & Matrix */}
+            <div className="flex-1 overflow-x-auto">
+              <div className="min-w-0" style={{ width: `${data.topics.length * 130}px` }}>
+                {/* Topics Header */}
+                <div className="h-16 border-b border-border bg-muted/20 flex">
+                  {data.topics.map((topic) => (
+                    <div 
+                      key={topic}
+                      className="w-32 flex-shrink-0 p-2 border-r border-border/50 last:border-r-0 flex items-center justify-center"
+                    >
+                      <div className="text-xs font-medium text-center transform -rotate-12 line-clamp-2">
+                        {topic}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            {/* Legend */}
-            <div className="mt-8 flex items-center justify-center space-x-4">
-              <span className="text-xs text-muted-foreground">Score Range:</span>
-              <div className="flex items-center space-x-2">
-                <div className="flex items-center space-x-1">
-                  <div className="w-4 h-4 rounded bg-red-400"></div>
-                  <span className="text-xs">0-20</span>
+                {/* Matrix Grid */}
+                <div className="min-h-0">
+                  {data.personas.map((persona) => (
+                    <div key={persona} className="h-14 border-b border-border/50 flex">
+                      {data.topics.map((topic) => {
+                        const score = getScoreForCell(persona, topic);
+                        const cellData = getCellData(persona, topic);
+                        
+                        return (
+                          <div
+                            key={`${persona}-${topic}`}
+                            className="w-32 flex-shrink-0 border-r border-border/50 last:border-r-0 p-1"
+                          >
+                            <div
+                              className={`
+                                w-full h-full rounded-md border border-border/30 flex items-center justify-center
+                                cursor-pointer transition-all duration-200 hover:scale-105 hover:border-primary
+                                ${getScoreColor(score)} ${score > 0 ? 'opacity-90' : 'opacity-30'}
+                              `}
+                              onClick={() => cellData && onCellClick?.(cellData)}
+                              title={`${persona} × ${topic}: ${score}%`}
+                            >
+                              <span className="text-sm font-bold text-white drop-shadow-sm">
+                                {score > 0 ? score : "—"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-4 h-4 rounded bg-orange-400"></div>
-                  <span className="text-xs">21-40</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-4 h-4 rounded bg-yellow-400"></div>
-                  <span className="text-xs">41-60</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-4 h-4 rounded bg-green-400"></div>
-                  <span className="text-xs">61-80</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-4 h-4 rounded bg-green-500"></div>
-                  <span className="text-xs">81-100</span>
-                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="mt-6 flex items-center justify-center space-x-4">
+            <span className="text-xs text-muted-foreground">Score Range:</span>
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1">
+                <div className="w-4 h-4 rounded bg-red-400"></div>
+                <span className="text-xs">0-20</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-4 h-4 rounded bg-orange-400"></div>
+                <span className="text-xs">21-40</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-4 h-4 rounded bg-yellow-400"></div>
+                <span className="text-xs">41-60</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-4 h-4 rounded bg-green-400"></div>
+                <span className="text-xs">61-80</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-4 h-4 rounded bg-green-500"></div>
+                <span className="text-xs">81-100</span>
               </div>
             </div>
           </div>
