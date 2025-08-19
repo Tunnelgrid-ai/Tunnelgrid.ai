@@ -74,6 +74,7 @@ class AIAnalysisRequest(BaseModel):
     question_text: str = Field(..., description="Question text for user prompt")
     model: str = Field(..., description="AI model identifier (e.g., 'openai-4o')")
     service: LLMServiceType = Field(..., description="LLM service to use")
+    brand_name: Optional[str] = Field(None, description="Brand name being analyzed (for competitor identification)")
     
     @validator('persona_description', 'question_text')
     def validate_text_fields(cls, v):
@@ -99,18 +100,20 @@ class BrandMention(BaseModel):
     context: str = Field(..., description="Context around the brand mention")
     sentiment_score: Optional[float] = Field(None, description="Sentiment score (-1 to 1)")
     service: LLMServiceType = Field(..., description="LLM service that provided this mention")
+
+class Competitor(BaseModel):
+    """Model for competitors identified from AI responses"""
+    brand_name: str = Field(..., description="Competitor brand name")
+    mention_count: int = Field(1, ge=1, description="Number of times this competitor was mentioned")
+    first_mentioned_at: Optional[datetime] = Field(None, description="Timestamp of first mention")
+    last_mentioned_at: Optional[datetime] = Field(None, description="Timestamp of most recent mention")
+    service: LLMServiceType = Field(..., description="LLM service that identified this competitor")
     
-    @validator('brand_name', 'context')
-    def validate_text_fields(cls, v):
+    @validator('brand_name')
+    def validate_brand_name(cls, v):
         if not v or not v.strip():
-            raise ValueError('Brand mention fields cannot be empty')
+            raise ValueError('Brand name cannot be empty')
         return v.strip()
-    
-    @validator('sentiment_score')
-    def validate_sentiment(cls, v):
-        if v is not None and not (-1.0 <= v <= 1.0):
-            raise ValueError('Sentiment score must be between -1.0 and 1.0')
-        return v
 
 class AIAnalysisResponse(BaseModel):
     """Response model for individual AI analysis"""
@@ -120,6 +123,7 @@ class AIAnalysisResponse(BaseModel):
     response_text: str
     citations: List[Citation] = []
     brand_mentions: List[BrandMention] = []
+    competitors: List[Competitor] = []
     processing_time_ms: int
     token_usage: Optional[Dict[str, Any]] = None  # Changed to Any to handle complex structures
     
@@ -184,6 +188,7 @@ class AnalysisResults(BaseModel):
     responses: List[Dict[str, Any]] = Field(default=[], description="List of AI responses with query details")
     citations: List[Dict[str, Any]] = Field(default=[], description="List of extracted citations")
     brand_mentions: List[Dict[str, Any]] = Field(default=[], description="List of brand mentions with sentiment")
+    competitors: List[Dict[str, Any]] = Field(default=[], description="List of competitors with mention counts")
     personas: List[Dict[str, Any]] = Field(default=[], description="List of personas for the audit")
     topics: List[Dict[str, Any]] = Field(default=[], description="List of topics for the audit")
     queries: List[Dict[str, Any]] = Field(default=[], description="List of queries that were analyzed")

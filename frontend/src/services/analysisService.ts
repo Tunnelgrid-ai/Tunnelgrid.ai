@@ -425,10 +425,10 @@ class AnalysisService {
         brandVisibility: this.processBrandVisibility(results),
         brandReach: this.processBrandReach(results),
         topicMatrix: this.processTopicMatrix(results),
-              modelVisibility: this.processModelVisibility(results),
-      sources: this.processSources(results),
-      strategicRecommendations: await this.getStrategicRecommendations(auditId),
-    };
+        modelVisibility: this.processModelVisibility(results),
+        sources: this.processSources(results),
+        strategicRecommendations: await this.getStrategicRecommendations(auditId),
+      };
 
       console.log('✅ Comprehensive report generated successfully');
       return {
@@ -454,43 +454,61 @@ class AnalysisService {
     const brandMentions = results.brand_mentions.length;
     const visibilityPercentage = totalResponses > 0 ? Math.round((brandMentions / totalResponses) * 100) : 0;
 
-    // Group mentions by brand name to create "platform rankings"
-    const brandCounts: Record<string, { mentions: number; responses: Set<string> }> = {};
+    // Use competitors data from backend if available, otherwise fall back to brand mentions processing
+    let platforms = [];
     
-    console.log('🔍 Processing brand mentions:', results.brand_mentions.length);
-    
-    results.brand_mentions.forEach(mention => {
-      const brandName = mention.brand_name;
-      console.log('📊 Brand mention:', brandName, 'in response:', mention.response_id);
+    if (results.competitors && results.competitors.length > 0) {
+      console.log('🏆 Using competitors data from backend:', results.competitors.length, 'competitors');
       
-      if (!brandCounts[brandName]) {
-        brandCounts[brandName] = { mentions: 0, responses: new Set() };
+      // Convert competitors data to platform format for the UI
+      platforms = results.competitors
+        .map((competitor: any) => ({
+          name: competitor.brand_name,
+          url: `${competitor.brand_name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '')}.com`,
+          mentions: competitor.mention_count,
+          visibility: Math.round((competitor.mention_count / totalResponses) * 100)
+        }))
+        .sort((a, b) => b.mentions - a.mentions)
+        .slice(0, 10); // Show top 10 brands
+    } else {
+      console.log('🔍 No competitors data, processing brand mentions:', results.brand_mentions.length);
+      
+      // Group mentions by brand name to create "platform rankings"
+      const brandCounts: Record<string, { mentions: number; responses: Set<string> }> = {};
+      
+      results.brand_mentions.forEach(mention => {
+        const brandName = mention.brand_name;
+        console.log('📊 Brand mention:', brandName, 'in response:', mention.response_id);
+        
+        if (!brandCounts[brandName]) {
+          brandCounts[brandName] = { mentions: 0, responses: new Set() };
+        }
+        brandCounts[brandName].mentions++;
+        brandCounts[brandName].responses.add(mention.response_id);
+      });
+      
+      console.log('📈 Brand counts:', brandCounts);
+
+      // Convert brand mentions to platform format for the UI
+      platforms = Object.entries(brandCounts)
+        .map(([brandName, data]) => ({
+          name: brandName,
+          url: `${brandName.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '')}.com`,
+          mentions: data.mentions,
+          visibility: Math.round((data.responses.size / totalResponses) * 100)
+        }))
+        .sort((a, b) => b.mentions - a.mentions)
+        .slice(0, 5);
+
+      // Fallback: If no platforms found, create some example data for debugging
+      if (platforms.length === 0) {
+        console.warn('⚠️ No brand mentions found, using fallback data');
+        platforms = [
+          { name: "Haldiram's", url: "haldirams.com", mentions: Math.round(brandMentions * 0.4), visibility: Math.round(visibilityPercentage * 0.8) },
+          { name: "Bikano", url: "bikano.com", mentions: Math.round(brandMentions * 0.2), visibility: Math.round(visibilityPercentage * 0.4) },
+          { name: "Others", url: "example.com", mentions: Math.round(brandMentions * 0.4), visibility: Math.round(visibilityPercentage * 0.6) }
+        ];
       }
-      brandCounts[brandName].mentions++;
-      brandCounts[brandName].responses.add(mention.response_id);
-    });
-    
-    console.log('📈 Brand counts:', brandCounts);
-
-    // Convert brand mentions to platform format for the UI
-    let platforms = Object.entries(brandCounts)
-      .map(([brandName, data]) => ({
-        name: brandName,
-        url: `${brandName.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '')}.com`, // Generate domain
-        mentions: data.mentions,
-        visibility: Math.round((data.responses.size / totalResponses) * 100)
-      }))
-      .sort((a, b) => b.mentions - a.mentions)
-      .slice(0, 5);
-
-    // Fallback: If no platforms found, create some example data for debugging
-    if (platforms.length === 0) {
-      console.warn('⚠️ No brand mentions found, using fallback data');
-      platforms = [
-        { name: "Haldiram's", url: "haldirams.com", mentions: Math.round(brandMentions * 0.4), visibility: Math.round(visibilityPercentage * 0.8) },
-        { name: "Bikano", url: "bikano.com", mentions: Math.round(brandMentions * 0.2), visibility: Math.round(visibilityPercentage * 0.4) },
-        { name: "Others", url: "example.com", mentions: Math.round(brandMentions * 0.4), visibility: Math.round(visibilityPercentage * 0.6) }
-      ];
     }
     
     console.log('🏆 Final platforms for UI:', platforms);

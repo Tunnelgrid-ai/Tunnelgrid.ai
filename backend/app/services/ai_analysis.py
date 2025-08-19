@@ -18,6 +18,7 @@ from ..models.analysis import (
     AIAnalysisResponse, 
     Citation, 
     BrandMention,
+    Competitor,
     LLMServiceType
 )
 
@@ -29,12 +30,13 @@ class OpenAIService:
     BASE_URL = "https://api.openai.com/v1/chat/completions"
     
     @staticmethod
-    async def analyze_brand_perception(request: AIAnalysisRequest) -> AIAnalysisResponse:
+    async def analyze_brand_perception(request: AIAnalysisRequest, target_brand: str = None) -> AIAnalysisResponse:
         """
         Analyze brand perception using OpenAI GPT-4o with retry logic for server errors
         
         Args:
             request: AIAnalysisRequest with query details and persona
+            target_brand: The brand being analyzed (for competitor identification)
             
         Returns:
             AIAnalysisResponse with parsed citations and brand mentions
@@ -48,8 +50,8 @@ class OpenAIService:
         
         for attempt in range(max_retries):
             try:
-                # Construct system prompt with persona context
-                system_prompt = OpenAIService._build_system_prompt(request.persona_description)
+                # Construct system prompt with persona context and competitor identification
+                system_prompt = OpenAIService._build_system_prompt(request.persona_description, target_brand)
                 
                 # Prepare API request
                 headers = {
@@ -117,9 +119,18 @@ class OpenAIService:
                         citations = OpenAIService._extract_citations(ai_content, request.service)
                         brand_mentions = OpenAIService._extract_brand_mentions(ai_content, request.service)
                     
+                    # Extract competitors from AI response if target brand is provided
+                    competitors = []
+                    if target_brand:
+                        competitors = OpenAIService._extract_competitors_from_response(ai_content, target_brand, request.service)
+                        # If we have AI-extracted competitors, use those instead of regex brand mentions
+                        if competitors:
+                            logger.info(f"🏆 Using AI-extracted competitors ({len(competitors)}) instead of regex brand mentions")
+                            brand_mentions = []  # Clear old brand mentions when we have AI competitors
+                    
                     processing_time = int((time.time() - start_time) * 1000)
                     
-                    logger.info(f"📊 Extracted {len(citations)} citations and {len(brand_mentions)} brand mentions")
+                    logger.info(f"📊 Extracted {len(citations)} citations, {len(brand_mentions)} brand mentions, and {len(competitors)} competitors")
                     
                     return AIAnalysisResponse(
                         query_id=request.query_id,
@@ -128,6 +139,7 @@ class OpenAIService:
                         response_text=ai_content,
                         citations=citations,
                         brand_mentions=brand_mentions,
+                        competitors=competitors,
                         processing_time_ms=processing_time,
                         token_usage=token_usage
                     )
@@ -161,17 +173,18 @@ class OpenAIService:
                     raise
     
     @staticmethod
-    def _build_system_prompt(persona_description: str) -> str:
+    def _build_system_prompt(persona_description: str, target_brand: str = None) -> str:
         """
-        Build system prompt for AI analysis with persona context
+        Build system prompt for AI analysis with persona context and competitor identification
         
         Args:
             persona_description: Description of the persona to embody
+            target_brand: The brand being analyzed (for competitor identification)
             
         Returns:
             Formatted system prompt string
         """
-        return f"""You are {persona_description}.
+        base_prompt = f"""You are {persona_description}.
 
 Please answer the following question naturally and authentically from your perspective as this persona. 
 
@@ -184,6 +197,31 @@ Important guidelines:
 6. Use language and tone appropriate for your persona
 
 Your response should feel authentic and provide valuable insights about brand perception from your unique perspective."""
+
+        if target_brand:
+            competitor_instruction = f"""
+
+COMPETITOR IDENTIFICATION - MANDATORY FORMAT:
+When you mention ANY brand, product, or service that competes with or is an alternative to {target_brand}, you MUST format it exactly as:
+
+**COMPETITOR: [Brand Name]**
+
+CRITICAL RULES:
+1. You MUST use this exact format: **COMPETITOR: [Brand Name]**
+2. Do NOT mention competitor brands without this format
+3. Only tag brands that are direct competitors or alternatives to {target_brand}
+4. If you mention a brand that is NOT a competitor to {target_brand}, do NOT tag it
+
+Examples for {target_brand}:
+- "I prefer {target_brand} over **COMPETITOR: GitLab** for version control"
+- "**COMPETITOR: Bitbucket** is another option I've considered"
+- "I use Slack for team communication" (no tag - Slack is not a competitor to {target_brand})
+
+IMPORTANT: Every time you mention a competitor brand, you MUST use the **COMPETITOR: [Brand Name]** format."""
+            
+            return base_prompt + competitor_instruction
+        
+        return base_prompt
 
     @staticmethod
     def _extract_citations(text: str, service: LLMServiceType) -> List[Citation]:
@@ -312,6 +350,71 @@ Your response should feel authentic and provide valuable insights about brand pe
                 unique_mentions.append(mention)
         
         return unique_mentions
+    
+    @staticmethod
+    def _extract_competitors_from_response(text: str, target_brand: str, service: LLMServiceType) -> List[Competitor]:
+        """
+        Extract competitors from AI response using the **COMPETITOR: [Brand Name]** format
+        
+        Args:
+            text: The AI response text to parse
+            target_brand: The brand being analyzed
+            service: The LLM service used
+            
+        Returns:
+            List of Competitor objects found in the text
+        """
+        competitors = []
+        
+        # Pattern to match **COMPETITOR: [Brand Name]** with variations
+        competitor_patterns = [
+            r'\*\*COMPETITOR:\s*([^*]+)\*\*',  # Standard format
+            r'\*\*COMPETITOR:\s*([^*]+?)\*\*',  # Non-greedy match
+            r'\*\*COMPETITOR:\s*([^*]+?)\*\*',  # Alternative non-greedy
+        ]
+        
+        # Try all patterns
+        all_matches = []
+        for pattern in competitor_patterns:
+            pattern_matches = re.finditer(pattern, text, re.IGNORECASE)
+            all_matches.extend(list(pattern_matches))
+        
+        for match in all_matches:
+            competitor_name = match.group(1).strip()
+            
+            # Skip if it's the target brand itself
+            if competitor_name.lower() == target_brand.lower():
+                continue
+            
+            # Skip very short or invalid names
+            if len(competitor_name) < 2:
+                continue
+            
+            # Extract context around the mention (±100 characters)
+            start_pos = max(0, match.start() - 100)
+            end_pos = min(len(text), match.end() + 100)
+            context = text[start_pos:end_pos].strip()
+            
+            # Create Competitor object
+            competitor = Competitor(
+                brand_name=competitor_name,
+                mention_count=1,  # Each tagged mention counts as 1
+                service=service
+            )
+            
+            competitors.append(competitor)
+            logger.info(f"🏆 Extracted competitor: {competitor_name} (context: {context[:50]}...)")
+        
+        # Remove duplicates while preserving order
+        seen_competitors = set()
+        unique_competitors = []
+        for competitor in competitors:
+            if competitor.brand_name.lower() not in seen_competitors:
+                seen_competitors.add(competitor.brand_name.lower())
+                unique_competitors.append(competitor)
+        
+        logger.info(f"✅ Extracted {len(unique_competitors)} unique competitors from AI response")
+        return unique_competitors
     
     @staticmethod
     def _analyze_sentiment(context: str) -> Optional[float]:

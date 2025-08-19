@@ -79,7 +79,7 @@ export const BrandVisibilityCard = ({ data, onViewDetails }: BrandVisibilityCard
           {/* Platform List */}
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Platform Rankings</h3>
+              <h3 className="text-lg font-semibold">All Brands</h3>
               <div className="flex space-x-4 text-sm text-muted-foreground">
                 <span>Mentions</span>
                 <span>Visibility</span>

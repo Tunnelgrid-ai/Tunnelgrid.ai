@@ -505,7 +505,7 @@ async def generate_questions_chunked(
                 
                 if success and questions:
                     # Verify we got roughly the expected number of questions (allow some variance)
-                    expected_questions = len(persona_chunk) * 10
+                    expected_questions = len(persona_chunk) * 1
                     if len(questions) >= expected_questions * 0.5:  # Allow 50% variance (was 0.7)
                         chunk_questions = questions
                         total_processing_time += chunk_time
@@ -614,7 +614,7 @@ async def generate_questions_single(
         return False, [], "no_api_key", processing_time, 0
 
     logger.info(f"🤖 Generating questions for {len(personas)} personas and {len(topics)} topics")
-    logger.info(f"📊 Expected questions: {len(personas) * 10}")
+    logger.info(f"📊 Expected questions: {len(personas) * 1}")
     
     for attempt in range(max_retries + 1):
         try:
@@ -634,7 +634,7 @@ async def generate_questions_single(
                 "messages": [
                     {
                         "role": "system",
-                        "content": f"You are an expert consumer research analyst. Generate exactly {len(personas) * 10} specific, actionable questions for brand analysis - exactly 10 questions per persona. Always respond with ONLY a valid JSON array in this format: [{{\"text\": \"question\", \"personaId\": \"exact_id\", \"topicName\": \"topic\", \"queryType\": \"brand_analysis\"}}, ...]"
+                        "content": f"You are an expert consumer research analyst. Generate exactly {len(personas) * 1} specific, actionable questions for brand analysis - exactly 1 question per persona. Always respond with ONLY a valid JSON array in this format: [{{\"text\": \"question\", \"personaId\": \"exact_id\", \"topicName\": \"topic\", \"queryType\": \"brand_analysis\"}}, ...]"
                     },
                     {
                         "role": "user", 
@@ -682,7 +682,7 @@ async def generate_questions_single(
                 if questions:
                     logger.info(f"✅ Successfully parsed {len(questions)} questions")
                     # Verify we got a reasonable number of questions (lowered threshold)
-                    expected_questions = len(personas) * 10
+                    expected_questions = len(personas) * 1
                     if len(questions) >= expected_questions * 0.5:  # Allow 50% variance (was 0.7)
                         # Set audit ID for all questions
                         for question in questions:
@@ -776,13 +776,13 @@ async def generate_questions(request: Request, body: QuestionGenerateRequest):
         use_chunking = should_use_chunking(body.personas, body.topics)
         
         if use_chunking:
-            logger.info(f"🔄 Using chunked generation strategy (estimated {len(body.personas) * 10} questions)")
+            logger.info(f"🔄 Using chunked generation strategy (estimated {len(body.personas) * 1} questions)")
             success, questions, source, processing_time_sec, token_usage = await generate_questions_chunked(
                 body.auditId, body.brandName, body.brandDescription, body.brandDomain,
                 body.productName, body.topics, body.personas
             )
         else:
-            logger.info(f"🚀 Using single request strategy (estimated {len(body.personas) * 10} questions)")
+            logger.info(f"🚀 Using single request strategy (estimated {len(body.personas) * 1} questions)")
             success, questions, source, processing_time_sec, token_usage = await generate_questions_single(
                 body.auditId, body.brandName, body.brandDescription, body.brandDomain,
                 body.productName, body.topics, body.personas

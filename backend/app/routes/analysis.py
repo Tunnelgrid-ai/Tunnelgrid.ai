@@ -242,6 +242,7 @@ async def get_analysis_results(audit_id: str):
     Get comprehensive analysis results for a completed audit
     """
     try:
+        print(f"🔍 ENTERING get_analysis_results for audit: {audit_id}")
         logger.info(f"📋 Getting analysis results for audit: {audit_id}")
         
         # Validate UUID format
@@ -283,6 +284,13 @@ async def get_analysis_results(audit_id: str):
         # Get brand mentions
         mentions_result = supabase.table("brand_mentions").select("*").in_("response_id", response_ids).execute()
         
+        # Get competitors data
+        print(f"🔍 Fetching competitors for audit: {validated_audit_id}")
+        logger.info(f"🔍 Fetching competitors for audit: {validated_audit_id}")
+        competitors_result = supabase.table("competitors").select("*").eq("audit_id", validated_audit_id).order("mention_count", desc=True).execute()
+        print(f"🏆 Found {len(competitors_result.data)} competitors for audit {validated_audit_id}")
+        logger.info(f"🏆 Found {len(competitors_result.data)} competitors for audit {validated_audit_id}")
+        
         # Organize results
         results = {
             "job_status": job,
@@ -292,6 +300,7 @@ async def get_analysis_results(audit_id: str):
             "responses": responses_result.data,
             "citations": citations_result.data,
             "brand_mentions": mentions_result.data,
+            "competitors": competitors_result.data,
             "personas": personas_result.data,
             "topics": topics_result.data,
             "queries": queries_result.data
@@ -319,14 +328,30 @@ async def process_analysis_job(
     1. Updates job status to 'running'
     2. Processes queries in batches to avoid overwhelming APIs
     3. Stores responses, citations, and brand mentions
-    4. Updates progress in real-time
-    5. Handles errors gracefully
+    4. Aggregates brand mentions and competitors across all queries
+    5. Updates progress in real-time
+    6. Handles errors gracefully
     """
     logger.info(f"🔄 Starting background processing for job {job_id}")
     
     supabase = get_supabase_client()
     
     try:
+        # Get brand name from audit for competitor identification
+        # First get brand_id from audit, then get brand_name from brand table
+        audit_result = supabase.table("audit").select("brand_id").eq("audit_id", audit_id).execute()
+        brand_name = None
+        if audit_result.data and audit_result.data[0].get("brand_id"):
+            brand_id = audit_result.data[0]["brand_id"]
+            brand_result = supabase.table("brand").select("brand_name").eq("brand_id", brand_id).execute()
+            if brand_result.data:
+                brand_name = brand_result.data[0].get("brand_name")
+                logger.info(f"🏷️ Brand name for competitor identification: {brand_name}")
+            else:
+                logger.warning(f"⚠️ No brand found for brand_id: {brand_id}")
+        else:
+            logger.warning(f"⚠️ No brand_id found for audit: {audit_id}")
+        
         # Update job status to running
         supabase.table("analysis_jobs").update({
             "status": AnalysisJobStatus.RUNNING.value
@@ -334,6 +359,9 @@ async def process_analysis_job(
         
         completed = 0
         failed = 0
+        
+        # Dictionary to aggregate brand mentions across all queries
+        brand_mentions_aggregated = {}  # brand_name -> count
         
         # Process queries in batches to avoid overwhelming APIs
         batch_size = PerformanceConfig.get_optimal_batch_size(len(queries))
@@ -359,11 +387,12 @@ async def process_analysis_job(
                     persona_description=persona["persona_description"],
                     question_text=query["query_text"],
                     model="openai-4o",
-                    service=LLMServiceType.OPENAI
+                    service=LLMServiceType.OPENAI,
+                    brand_name=brand_name
                 )
                 
                 # Add to batch processing
-                tasks.append(process_single_query(analysis_request, supabase))
+                tasks.append(process_single_query_with_aggregation(analysis_request, supabase, audit_id, brand_mentions_aggregated))
             
             # Process batch concurrently
             if tasks:
@@ -423,6 +452,38 @@ async def process_analysis_job(
             "error_message": f"{failed} queries failed" if failed > 0 else None
         }).eq("job_id", job_id).execute()
         
+        # Aggregate and store all brand mentions (including primary brand and competitors)
+        if brand_mentions_aggregated:
+            logger.info(f"📊 Aggregating {len(brand_mentions_aggregated)} unique brands across all queries")
+            
+            # Clear existing competitors for this audit
+            try:
+                supabase.table("competitors").delete().eq("audit_id", audit_id).execute()
+                logger.info(f"🗑️ Cleared existing competitors for audit {audit_id}")
+            except Exception as clear_error:
+                logger.warning(f"⚠️ Failed to clear existing competitors: {clear_error}")
+            
+            # Store aggregated brand mentions
+            competitors_data = []
+            for brand_name, mention_count in brand_mentions_aggregated.items():
+                competitors_data.append({
+                    "competitor_id": str(uuid.uuid4()),
+                    "audit_id": audit_id,
+                    "brand_name": brand_name,
+                    "mention_count": mention_count
+                })
+            
+            if competitors_data:
+                try:
+                    competitors_result = supabase.table("competitors").insert(competitors_data).execute()
+                    if hasattr(competitors_result, 'error') and competitors_result.error:
+                        logger.error(f"❌ Failed to store aggregated competitors: {competitors_result.error}")
+                    else:
+                        logger.info(f"✅ Successfully stored {len(competitors_data)} aggregated brand mentions")
+                        logger.info(f"📊 Brand mention counts: {brand_mentions_aggregated}")
+                except Exception as store_error:
+                    logger.error(f"❌ Error storing aggregated competitors: {store_error}")
+        
         logger.info(f"🏁 Job {job_id} finished: {completed} completed, {failed} failed")
         
     except Exception as e:
@@ -435,7 +496,7 @@ async def process_analysis_job(
             "error_message": str(e)
         }).eq("job_id", job_id).execute()
 
-async def process_single_query(request: AIAnalysisRequest, supabase) -> bool:
+async def process_single_query(request: AIAnalysisRequest, supabase, audit_id: str = None) -> bool:
     """
     Process a single query through AI analysis and store results
     
@@ -502,6 +563,109 @@ async def process_single_query(request: AIAnalysisRequest, supabase) -> bool:
             
             if hasattr(mentions_result, 'error') and mentions_result.error:
                 logger.warning(f"⚠️ Failed to store brand mentions for {request.query_id}: {mentions_result.error}")
+        
+        # Store competitors if any (will be aggregated later)
+        if analysis_result.competitors and audit_id:
+            logger.info(f"📊 Found {len(analysis_result.competitors)} competitors in this query")
+            # Note: Competitors will be aggregated and stored at the end of the analysis job
+        elif analysis_result.competitors:
+            logger.warning(f"⚠️ Competitors found but no audit_id provided: {len(analysis_result.competitors)} competitors")
+        else:
+            logger.info(f"📊 No competitors found for this query")
+        
+        logger.debug(f"✅ Successfully processed query {request.query_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error processing query {request.query_id}: {e}")
+        raise e
+
+async def process_single_query_with_aggregation(request: AIAnalysisRequest, supabase, audit_id: str = None, brand_mentions_aggregated: Dict = None) -> bool:
+    """
+    Process a single query through AI analysis and store results, while aggregating brand mentions
+    
+    Args:
+        request: AIAnalysisRequest with query details
+        supabase: Supabase client for database operations
+        audit_id: Audit ID for storing results
+        brand_mentions_aggregated: Dictionary to aggregate brand mentions across queries
+        
+    Returns:
+        bool: True if successful, False otherwise
+        
+    Raises:
+        Exception: If processing fails
+    """
+    try:
+        logger.debug(f"🔍 Processing query {request.query_id}")
+        
+        # Analyze with OpenAI (pass target brand for competitor identification)
+        target_brand = request.brand_name if hasattr(request, 'brand_name') else None
+        analysis_result = await openai_service.analyze_brand_perception(request, target_brand)
+        
+        # Store response in database
+        response_data = {
+            "response_id": str(uuid.uuid4()),
+            "query_id": request.query_id,
+            "model": request.model,
+            "response_text": analysis_result.response_text
+        }
+        
+        response_result = supabase.table("responses").insert(response_data).execute()
+        
+        if hasattr(response_result, 'error') and response_result.error:
+            raise Exception(f"Failed to store response: {response_result.error}")
+        
+        response_id = response_result.data[0]["response_id"]
+        
+        # Store citations if any
+        if analysis_result.citations:
+            citations_data = []
+            for citation in analysis_result.citations:
+                citations_data.append({
+                    "citation_id": str(uuid.uuid4()),
+                    "response_id": response_id,
+                    "citation_text": citation.text,
+                    "source_url": citation.source_url
+                })
+            
+            citations_result = supabase.table("citations").insert(citations_data).execute()
+            
+            if hasattr(citations_result, 'error') and citations_result.error:
+                logger.warning(f"⚠️ Failed to store citations for {request.query_id}: {citations_result.error}")
+        
+        # Store brand mentions if any
+        if analysis_result.brand_mentions:
+            mentions_data = []
+            for mention in analysis_result.brand_mentions:
+                mentions_data.append({
+                    "mention_id": str(uuid.uuid4()),
+                    "response_id": response_id,
+                    "brand_name": mention.brand_name,
+                    "mention_context": mention.context,
+                    "sentiment_score": mention.sentiment_score
+                })
+                
+                # Aggregate brand mentions for competitors table
+                if brand_mentions_aggregated is not None:
+                    brand_name = mention.brand_name
+                    brand_mentions_aggregated[brand_name] = brand_mentions_aggregated.get(brand_name, 0) + 1
+            
+            mentions_result = supabase.table("brand_mentions").insert(mentions_data).execute()
+            
+            if hasattr(mentions_result, 'error') and mentions_result.error:
+                logger.warning(f"⚠️ Failed to store brand mentions for {request.query_id}: {mentions_result.error}")
+        
+        # Also aggregate competitors from the AI response
+        if analysis_result.competitors and brand_mentions_aggregated is not None:
+            logger.info(f"📊 Found {len(analysis_result.competitors)} competitors in this query")
+            for competitor in analysis_result.competitors:
+                brand_name = competitor.brand_name
+                brand_mentions_aggregated[brand_name] = brand_mentions_aggregated.get(brand_name, 0) + competitor.mention_count
+        elif analysis_result.competitors:
+            logger.warning(f"⚠️ Competitors found but no aggregation dict provided: {len(analysis_result.competitors)} competitors")
+        else:
+            logger.info(f"📊 No competitors found for this query")
         
         logger.debug(f"✅ Successfully processed query {request.query_id}")
         return True
