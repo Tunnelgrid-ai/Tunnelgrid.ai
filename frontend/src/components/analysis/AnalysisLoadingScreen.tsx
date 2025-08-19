@@ -78,7 +78,7 @@ export const AnalysisLoadingScreen: React.FC<AnalysisLoadingScreenProps> = ({
           return;
         }
 
-        const response = await fetch(`/api/analysis/status/${jobId}`);
+        const response = await fetch(`https://dazzling-smile-production.up.railway.app/api/analysis/status/${jobId}`);
         
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);

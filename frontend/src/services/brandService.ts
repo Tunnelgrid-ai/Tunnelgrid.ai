@@ -9,7 +9,7 @@
  * - TypeScript type safety
  */
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'https://dazzling-smile-production.up.railway.app/api';
 
 // Request/Response types matching backend models
 export interface BrandDescriptionUpdateRequest {
