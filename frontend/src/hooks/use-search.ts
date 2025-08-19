@@ -27,7 +27,7 @@ export function useSearch({ onSelectBrand }: UseSearchProps) {
     if (debouncedSearch) {
       setLoading(true);
       setError(null);
-      fetch(`/api/brand-search?q=${encodeURIComponent(debouncedSearch)}`)
+      fetch(`https://dazzling-smile-production.up.railway.app/api/brand-search?q=${encodeURIComponent(debouncedSearch)}`)
         .then((res) => res.json())
         .then((data) => {
           if (Array.isArray(data)) {

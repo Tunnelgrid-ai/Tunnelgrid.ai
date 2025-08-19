@@ -1,7 +1,7 @@
 import { Question } from '@/types/brandTypes';
 
-// ✅ REVERTED: Back to real backend - using 127.0.0.1 to match backend exactly
-const API_BASE_URL = 'http://127.0.0.1:8000';
+// ✅ Using Railway backend - https://dazzling-smile-production.up.railway.app
+const API_BASE_URL = 'https://dazzling-smile-production.up.railway.app';
 
 export interface QuestionGenerateRequest {
   auditId: string;

@@ -142,7 +142,7 @@ export async function ensureProductExists(brandId: string, productId: string, pr
   try {
     console.log('📝 Ensuring product exists:', { brandId, productId, productName });
     
-    const response = await fetch('/api/products/create', {
+    const response = await fetch('https://dazzling-smile-production.up.railway.app/api/products/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -240,7 +240,7 @@ export async function createAudit(request: CreateAuditRequest): Promise<AuditRes
     // STEP 5: Make API request to create audit
     console.log('📝 Making audit creation request to backend...');
     
-    const response = await fetch('/api/audits/create', {
+    const response = await fetch('https://dazzling-smile-production.up.railway.app/api/audits/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -366,7 +366,7 @@ export async function markSetupComplete(auditId: string): Promise<AuditServiceRe
     console.log('✅ Marking setup complete via backend API:', auditId);
 
     // NEW APPROACH: Use backend API instead of direct Supabase client
-    const response = await fetch(`/api/audits/${auditId}/mark-setup-complete`, {
+    const response = await fetch(`https://dazzling-smile-production.up.railway.app/api/audits/${auditId}/mark-setup-complete`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -466,7 +466,7 @@ export async function completeAudit(auditId: string): Promise<AuditServiceRespon
     console.log('✅ Completing audit via backend API:', auditId);
 
     // NEW APPROACH: Use backend API instead of direct Supabase client
-    const response = await fetch(`/api/audits/${auditId}/complete`, {
+    const response = await fetch(`https://dazzling-smile-production.up.railway.app/api/audits/${auditId}/complete`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

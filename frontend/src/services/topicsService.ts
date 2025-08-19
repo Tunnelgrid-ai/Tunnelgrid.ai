@@ -20,7 +20,7 @@ import { Topic } from "@/types/brandTypes";
 import { v4 as uuidv4 } from 'uuid';
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'https://dazzling-smile-production.up.railway.app/api';
 
 // Backend API interfaces for topics updates
 export interface TopicUpdateApiRequest {

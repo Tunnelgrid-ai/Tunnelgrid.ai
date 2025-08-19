@@ -13,7 +13,7 @@
 
 // Configuration: API settings similar to other services
 const API_CONFIG = {
-  BASE_URL: import.meta.env.DEV ? '' : 'http://127.0.0.1:8000',  // Use proxy in dev, direct in prod
+  BASE_URL: import.meta.env.DEV ? 'https://dazzling-smile-production.up.railway.app' : 'https://dazzling-smile-production.up.railway.app',  // Railway backend
 };
 
 // =============================================================================
