@@ -200,24 +200,16 @@ async def root():
         }
     }
 
-# HEALTH CHECK ENDPOINT  
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
+# HEALTH ENDPOINT
+@app.get("/health")
+async def health():
     """
-    Global health check endpoint with service status
+    Health check endpoint
     """
-    services = {
-        "api": "running",
-        "supabase": "available" if settings.has_supabase_config else "unavailable",
-        "groqcloud": "available" if settings.has_groq_config else "unavailable",
-        "logodev": "available" if settings.has_logodev_config else "unavailable",
-        "openai_search": "available" if settings.has_openai_config else "unavailable"
-    }
-    
     return HealthResponse(
         status="healthy",
-        services=services,
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.utcnow(),
+        version=settings.APP_VERSION,
         environment=settings.ENVIRONMENT
     )
 
