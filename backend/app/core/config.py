@@ -57,20 +57,8 @@ class Settings:
     OPENAI_SEARCH_USER_LOCATION_COUNTRY: Optional[str] = os.getenv("OPENAI_SEARCH_USER_LOCATION_COUNTRY", "US")
     OPENAI_SEARCH_USER_LOCATION_CITY: Optional[str] = os.getenv("OPENAI_SEARCH_USER_LOCATION_CITY")
 
-    # CORS configuration
-    CORS_ORIGINS: list = [
-        "http://localhost:3000",    # React dev server
-        "http://localhost:8080",    # Alternative dev port
-        "http://localhost:8081",    # Vite dev server
-        "http://localhost:8082",    # Vite dev server (fallback port)
-        "http://localhost:8083",    # Vite dev server (fallback port)
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:8080", 
-        "http://127.0.0.1:8081",
-        "http://127.0.0.1:8082",    # Fallback port
-        "http://127.0.0.1:8083",    # Fallback port
-        # Add production domains here
-    ]
+    # CORS configuration - Allow all origins to fix CORS issues
+    CORS_ORIGINS: list = ["*"]
     
     # Rate limiting
     RATE_LIMIT_REQUESTS: int = int(os.getenv("RATE_LIMIT_REQUESTS", "10"))
