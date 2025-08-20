@@ -14,17 +14,10 @@
  */
 
 import { Topic } from '../types/brandTypes';
+import { getApiUrl } from '@/config/api';
 
-// CONFIGURATION: Backend API settings
-const API_CONFIG = {
-  BASE_URL: import.meta.env.DEV ? '' : 'http://127.0.0.1:8000',  // Use proxy in dev, direct in prod
-  ENDPOINTS: {
-    GENERATE: '/api/topics/generate',
-    FALLBACK: '/api/topics/fallback',
-    HEALTH: '/api/topics/health'
-  },
-  TIMEOUT: 35000, // Slightly longer than backend timeout
-};
+// TIMEOUT configuration
+const TIMEOUT = 35000; // Slightly longer than backend timeout
 
 // INTERFACES: API request/response types
 export interface GenerateTopicsRequest {
@@ -90,9 +83,9 @@ export async function generateTopics(
 
     // Call backend API
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
 
-    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.GENERATE}`, {
+    const response = await fetch(getApiUrl('TOPICS_GENERATE'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -135,7 +128,7 @@ export async function generateTopics(
     try {
       console.log('🔄 Attempting to get fallback topics from backend...');
       
-      const fallbackResponse = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.FALLBACK}`, {
+      const fallbackResponse = await fetch(getApiUrl('TOPICS_FALLBACK'), {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -164,7 +157,7 @@ export async function generateTopics(
  */
 export async function checkBackendHealth(): Promise<HealthResponse | null> {
   try {
-    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.HEALTH}`, {
+    const response = await fetch(getApiUrl('TOPICS_HEALTH'), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

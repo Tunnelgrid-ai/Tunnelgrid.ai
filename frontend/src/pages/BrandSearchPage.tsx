@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { getApiUrl } from "@/config/api";
 import { SearchBar } from "@/components/brand/SearchBar";
 import { cn } from "@/lib/utils";
 import { CheckCircle, BarChart3, Users, Settings, Play } from "lucide-react";
@@ -99,7 +100,7 @@ const BrandSearchPage = () => {
     
     try {
       // 1. Insert brand
-      const insertResponse = await fetch("/api/brands/create", {
+      const insertResponse = await fetch(getApiUrl('BRANDS_CREATE'), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -121,7 +122,7 @@ const BrandSearchPage = () => {
       }
 
       // 2. Call OpenAI API via backend /analyze endpoint
-      const analyzeResponse = await fetch("/api/brands/analyze", {
+      const analyzeResponse = await fetch(getApiUrl('BRANDS_ANALYZE'), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -139,7 +140,7 @@ const BrandSearchPage = () => {
       const { description, product } = analyzeResult;
 
       // 4. Update DB with description and product
-      const updateResponse = await fetch("/api/brands/update", {
+      const updateResponse = await fetch(getApiUrl('BRANDS_UPDATE'), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

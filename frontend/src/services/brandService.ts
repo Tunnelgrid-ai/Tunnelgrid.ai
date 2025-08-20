@@ -9,7 +9,7 @@
  * - TypeScript type safety
  */
 
-const API_BASE_URL = 'http://localhost:8000/api';
+import { getApiUrl } from '@/config/api';
 
 // Request/Response types matching backend models
 export interface BrandDescriptionUpdateRequest {
@@ -26,7 +26,7 @@ class BrandService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = `${API_BASE_URL}/brands`;
+    this.baseUrl = getApiUrl('BRANDS_CREATE').replace('/create', '');
   }
 
   /**

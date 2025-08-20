@@ -14,6 +14,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getApiUrl } from '@/config/api';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -78,7 +79,7 @@ export const AnalysisLoadingScreen: React.FC<AnalysisLoadingScreenProps> = ({
           return;
         }
 
-        const response = await fetch(`/api/analysis/status/${jobId}`);
+        const response = await fetch(`${getApiUrl('ANALYSIS_STATUS')}/${jobId}`);
         
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);

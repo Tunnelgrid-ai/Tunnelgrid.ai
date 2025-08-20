@@ -24,6 +24,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from 'uuid';
+import { getApiUrl } from "@/config/api";
 
 /**
  * TYPE DEFINITION: Audit Service Response
@@ -142,7 +143,7 @@ export async function ensureProductExists(brandId: string, productId: string, pr
   try {
     console.log('📝 Ensuring product exists:', { brandId, productId, productName });
     
-    const response = await fetch('/api/products/create', {
+    const response = await fetch(getApiUrl('PRODUCTS_CREATE'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -240,7 +241,7 @@ export async function createAudit(request: CreateAuditRequest): Promise<AuditRes
     // STEP 5: Make API request to create audit
     console.log('📝 Making audit creation request to backend...');
     
-    const response = await fetch('/api/audits/create', {
+    const response = await fetch(getApiUrl('AUDITS_CREATE'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -366,7 +367,7 @@ export async function markSetupComplete(auditId: string): Promise<AuditServiceRe
     console.log('✅ Marking setup complete via backend API:', auditId);
 
     // NEW APPROACH: Use backend API instead of direct Supabase client
-    const response = await fetch(`/api/audits/${auditId}/mark-setup-complete`, {
+    const response = await fetch(`${getApiUrl('AUDITS_MARK_SETUP_COMPLETE')}/${auditId}/mark-setup-complete`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -466,7 +467,7 @@ export async function completeAudit(auditId: string): Promise<AuditServiceRespon
     console.log('✅ Completing audit via backend API:', auditId);
 
     // NEW APPROACH: Use backend API instead of direct Supabase client
-    const response = await fetch(`/api/audits/${auditId}/complete`, {
+    const response = await fetch(`${getApiUrl('AUDITS_COMPLETE')}/${auditId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

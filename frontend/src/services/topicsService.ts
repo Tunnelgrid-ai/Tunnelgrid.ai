@@ -19,8 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Topic } from "@/types/brandTypes";
 import { v4 as uuidv4 } from 'uuid';
 
-// API Configuration
-const API_BASE_URL = 'http://localhost:8000/api';
+import { getApiUrl } from '@/config/api';
 
 // Backend API interfaces for topics updates
 export interface TopicUpdateApiRequest {
@@ -379,7 +378,7 @@ export async function updateTopicRequest(request: UpdateTopicRequest): Promise<T
     }
     
     // CALL: Backend API to update topic
-    const response = await fetch(`${API_BASE_URL}/topics/${topicId}`, {
+    const response = await fetch(`${getApiUrl('TOPICS_UPDATE')}/${topicId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

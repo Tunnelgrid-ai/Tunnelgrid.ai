@@ -12,7 +12,7 @@
 
 import type { Persona } from '@/types/brandTypes';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+import { getApiUrl } from '@/config/api';
 
 // Request/Response types matching backend models
 export interface PersonaGenerateRequest {
@@ -90,7 +90,7 @@ export async function generatePersonas(request: PersonaGenerateRequest): Promise
   try {
     console.log('🚀 Generating personas with request:', request);
 
-    const response = await fetch(`${API_BASE_URL}/personas/generate`, {
+    const response = await fetch(getApiUrl('PERSONAS_GENERATE'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -148,7 +148,7 @@ export async function storePersonas(request: PersonaStoreRequest): Promise<Perso
   try {
     console.log('💾 Storing personas:', { auditId: request.auditId, count: request.personas.length });
 
-    const response = await fetch(`${API_BASE_URL}/personas/store`, {
+    const response = await fetch(getApiUrl('PERSONAS_STORE'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -202,7 +202,7 @@ export async function updatePersona(personaId: string, updates: PersonaUpdateReq
   try {
     console.log('📝 Updating persona:', personaId, updates);
 
-    const response = await fetch(`${API_BASE_URL}/personas/${personaId}`, {
+    const response = await fetch(`${getApiUrl('PERSONAS_UPDATE')}/${personaId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -251,7 +251,7 @@ export async function getPersonasByAudit(auditId: string): Promise<PersonasApiRe
   try {
     console.log('📥 Retrieving personas for audit:', auditId);
 
-    const response = await fetch(`${API_BASE_URL}/personas/by-audit/${auditId}`, {
+    const response = await fetch(`${getApiUrl('PERSONAS_BY_AUDIT')}/${auditId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -306,7 +306,7 @@ export async function getFallbackPersonas(): Promise<PersonasApiResponse> {
   try {
     console.log('🔄 Getting fallback personas');
 
-    const response = await fetch(`${API_BASE_URL}/personas/fallback`, {
+    const response = await fetch(getApiUrl('PERSONAS_FALLBACK'), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

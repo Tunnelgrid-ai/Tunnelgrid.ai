@@ -1,7 +1,5 @@
 import { Question } from '@/types/brandTypes';
-
-// ✅ REVERTED: Back to real backend - using 127.0.0.1 to match backend exactly
-const API_BASE_URL = 'http://127.0.0.1:8000';
+import { getApiUrl } from '@/config/api';
 
 export interface QuestionGenerateRequest {
   auditId: string;
@@ -63,7 +61,7 @@ class QuestionService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = `${API_BASE_URL}/api/questions`;
+    this.baseUrl = getApiUrl('QUESTIONS');
   }
 
   /**
@@ -72,7 +70,7 @@ class QuestionService {
   async generateQuestions(request: QuestionGenerateRequest): Promise<QuestionsResponse> {
     try {
       console.log('🤖 Generating questions for personas:', request.personas.length);
-      console.log('🔗 API Base URL:', API_BASE_URL);
+      console.log('🔗 API Base URL:', getApiUrl('QUESTIONS_GENERATE'));
       console.log('🔗 Full URL:', `${this.baseUrl}/generate`);
       console.log('🔗 Request payload:', JSON.stringify(request, null, 2));
       
@@ -294,7 +292,7 @@ export const retryFailedPersonas = async (request: QuestionGenerateRequest): Pro
   
   try {
     // Call the retry endpoint
-    const response = await fetch(`${API_BASE_URL}/api/questions/retry-failed-personas`, {
+    const response = await fetch(getApiUrl('QUESTIONS_RETRY'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

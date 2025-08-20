@@ -11,10 +11,7 @@
  * - Type-safe API interactions
  */
 
-// Configuration: API settings similar to other services
-const API_CONFIG = {
-  BASE_URL: import.meta.env.DEV ? '' : 'http://127.0.0.1:8000',  // Use proxy in dev, direct in prod
-};
+import { getApiUrl } from '@/config/api';
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -114,7 +111,7 @@ class AnalysisService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = `${API_CONFIG.BASE_URL}/api/analysis`;
+    this.baseUrl = getApiUrl('ANALYSIS');
   }
 
   /**
@@ -1110,7 +1107,7 @@ class AnalysisService {
     try {
       console.log('🎯 Fetching strategic recommendations from backend API');
       
-      const response = await fetch(`${API_CONFIG.BASE_URL}/api/strategic/recommendations/${auditId}`, {
+      const response = await fetch(`${getApiUrl('STRATEGIC_RECOMMENDATIONS')}/${auditId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1166,7 +1163,7 @@ class AnalysisService {
     try {
       console.log('📊 Fetching comprehensive report from optimized backend API for audit:', auditId);
 
-      const response = await fetch(`${this.baseUrl}/comprehensive-report/${auditId}`, {
+      const response = await fetch(`${getApiUrl('ANALYSIS_COMPREHENSIVE_REPORT')}/${auditId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

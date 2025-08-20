@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useDebounce } from "./use-debounce";
+import { getApiUrl } from "@/config/api";
 
 interface Brand {
   id: string;
@@ -27,7 +28,7 @@ export function useSearch({ onSelectBrand }: UseSearchProps) {
     if (debouncedSearch) {
       setLoading(true);
       setError(null);
-      fetch(`/api/brand-search?q=${encodeURIComponent(debouncedSearch)}`)
+      fetch(`${getApiUrl('BRAND_SEARCH')}?q=${encodeURIComponent(debouncedSearch)}`)
         .then((res) => res.json())
         .then((data) => {
           if (Array.isArray(data)) {

@@ -12,10 +12,7 @@
  * - Statistics and analytics
  */
 
-// Configuration
-const API_CONFIG = {
-  BASE_URL: import.meta.env.DEV ? '' : 'http://127.0.0.1:8000',
-};
+import { getApiUrl } from '@/config/api';
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -127,7 +124,7 @@ class StudyService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = `${API_CONFIG.BASE_URL}/api/studies`;
+    this.baseUrl = getApiUrl('STUDIES_GET');
   }
 
   // =============================================================================
